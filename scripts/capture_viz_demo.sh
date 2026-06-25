@@ -81,13 +81,13 @@ wait_http() {
 
 find_megatron_pid() {
   local p
-  for p in $(pgrep -f "[p]ython.*pretrain_gpt.py" 2>/dev/null); do
+  for p in $(pgrep -f "[p]ython.*pretrain_gpt" 2>/dev/null); do
     if tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "LOCAL_RANK=0"; then
       echo "$p"
       return 0
     fi
   done
-  pgrep -f "[p]ython.*pretrain_gpt.py" 2>/dev/null | head -1
+  pgrep -f "[p]ython.*pretrain_gpt" 2>/dev/null | head -1
 }
 
 echo "[1/4] 启动 demo 训练 + Megatron（并行，GPU=$GPU）"
@@ -111,7 +111,7 @@ echo "demo_pid=$DEMO_PID web_ui=$PROBING_ASSETS_ROOT" >>"$OUT/meta.txt"
 nproc_args=( $(preset_args gpt345m) )
 PROBING=1 PROBING_PORT="$MEGA_PORT" PROBING_ASSETS_ROOT="$PROBING_ASSETS_ROOT" \
   torchrun --nproc_per_node=1 --master_port=29501 \
-  "$MEGATRON_ROOT/pretrain_gpt.py" \
+  "$ROOT/scripts/pretrain_gpt_probing.py" \
   "${MEGATRON_COMMON[@]}" "${nproc_args[@]}" \
   --train-iters 80 --exit-interval 80 \
   >"$MEGA_LOG/train.log" 2>&1 &

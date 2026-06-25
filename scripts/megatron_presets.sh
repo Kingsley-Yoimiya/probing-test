@@ -29,6 +29,7 @@ MEGATRON_COMMON=(
   --log-interval 1
   --log-params-norm
   --log-num-zeros-in-grad
+  --disable-gloo-process-groups
 )
 
 # preset 名 -> (描述, model/parallel args...)
@@ -115,7 +116,7 @@ gpu_for_preset() {
   case "$name" in
     gpt345m_tp2) echo "0,1" ;;
     gpt126m_pp2|gpt126m_2dp) echo "1,3" ;;
-    gpt126m_4dp) echo "1,2,3,0" ;;
+    gpt126m_4dp) echo "0,1,2,3" ;;
     *) echo "1" ;;
   esac
 }

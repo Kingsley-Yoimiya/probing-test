@@ -26,7 +26,7 @@ GPU="$(gpu_for_preset "$PRESET")"
 NPROC="$(nproc_for_preset "$PRESET")"
 export CUDA_VISIBLE_DEVICES="$GPU"
 export PYTHONPATH="$MEGATRON_ROOT"
-export NCCL_IB_DISABLE=1 GLOO_SOCKET_IFNAME=lo MASTER_ADDR=127.0.0.1
+export NCCL_IB_DISABLE=1 GLOO_SOCKET_IFNAME=lo NCCL_SOCKET_IFNAME=lo MASTER_ADDR=127.0.0.1
 export PROBING_ASSETS_ROOT="$ROOT/probing/web/dist"
 
 shot() {
@@ -50,13 +50,13 @@ wait_http() {
 
 find_megatron_pid() {
   local p
-  for p in $(pgrep -f "[p]ython.*pretrain_gpt.py" 2>/dev/null); do
+  for p in $(pgrep -f "[p]ython.*pretrain_gpt" 2>/dev/null); do
     if tr '\0' '\n' < "/proc/$p/environ" 2>/dev/null | grep -qx "LOCAL_RANK=0"; then
       echo "$p"
       return 0
     fi
   done
-  pgrep -f "[p]ython.*pretrain_gpt.py" 2>/dev/null | head -1
+  pgrep -f "[p]ython.*pretrain_gpt" 2>/dev/null | head -1
 }
 
 # shellcheck disable=SC2046
@@ -65,9 +65,9 @@ nproc_args=( $(preset_args "$PRESET") )
 echo "启动 Megatron preset=$PRESET GPU=$GPU nproc=$NPROC port=$MEGA_PORT iters=$TRAIN_ITERS..."
 echo "MEGATRON_PRESET=$PRESET MEGATRON_GPUS=$GPU MEGATRON_NPROC=$NPROC" >>"$OUT/meta.txt"
 
-PROBING=1 PROBING_PORT="$MEGA_PORT" PROBING_ASSETS_ROOT="$PROBING_ASSETS_ROOT" \
+PROBING=1 PROBING_PORT="$MEGA_PORT" PROBING_SPAN_BACKENDS=memtable,logger PROBING_ASSETS_ROOT="$PROBING_ASSETS_ROOT" \
   torchrun --nproc_per_node="$NPROC" --master_port=29523 \
-  "$MEGATRON_ROOT/pretrain_gpt.py" \
+  "$ROOT/scripts/pretrain_gpt_probing.py" \
   "${MEGATRON_COMMON[@]}" "${nproc_args[@]}" \
   --train-iters "$TRAIN_ITERS" --exit-interval "$TRAIN_ITERS" \
   >"$LOG/train.log" 2>&1 &
@@ -100,8 +100,8 @@ fi
 BASE="http://127.0.0.1:$MEGA_PORT"
 echo "采集 Megatron Web 截图（/spans 优先）..."
 shot "$BASE/spans" "$OUT/web_megatron_spans.png" 18
-shot "$BASE/" "$OUT/web_megatron_dashboard.png" 12
 shot "$BASE/training" "$OUT/web_megatron_training.png" 15
+shot "$BASE/" "$OUT/web_megatron_dashboard.png" 12
 
 # 4 卡 collective 样例 CLI
 cli_capture() {

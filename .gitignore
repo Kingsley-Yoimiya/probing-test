@@ -1,0 +1,32 @@
+# 本地构建与环境
+.build-env/
+logs/
+**/.venv/
+venv/
+**/__pycache__/
+*.pyc
+
+# Rust 编译产物
+**/target/
+*.so
+*.pdb
+
+# Python 打包
+**/*.egg-info/
+**/pkg/
+**/dist/
+!probing/web/dist/
+
+# 实验运行产物（保留 latest/）
+docs/assets/run_*/
+
+# IDE / 工具
+.idea/
+.claude/
+.VSCodeCounter/
+.python-version
+
+# 其他
+*.bak
+report.json
+*.pth.tar

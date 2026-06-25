@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 启动 2-GPU DDP demo，采集 Step × Rank straggler 热力图素材
+# 启动多卡 DDP demo，采集 Step × Rank straggler 热力图素材（默认 4 GPU）
 set -eo pipefail
 
 ROOT="/home/yjr/probing-test"
@@ -8,8 +8,9 @@ TS=$(date +%Y%m%d_%H%M%S)
 OUT="${OUT:-$ROOT/docs/assets/latest}"
 LOG="$ROOT/logs/heatmap_demo_$TS"
 DDP_PORT="${DDP_PORT:-8767}"
-DDP_GPUS="${DDP_GPUS:-2,3}"
-DEMO_DURATION_SEC="${DEMO_DURATION_SEC:-120}"
+DDP_GPUS="${DDP_GPUS:-1,2,3,0}"
+NPROC="${NPROC:-4}"
+DEMO_DURATION_SEC="${DEMO_DURATION_SEC:-150}"
 CHROME="${CHROME:-chromium-browser}"
 
 mkdir -p "$OUT" "$LOG"
@@ -28,13 +29,13 @@ fi
 export PROBING_ASSETS_ROOT="$ROOT/probing/web/dist"
 
 echo "CAPTURE_HEATMAP_ID=$TS" >>"$OUT/meta.txt"
-echo "ddp_port=$DDP_PORT gpus=$DDP_GPUS duration=${DEMO_DURATION_SEC}s" >>"$OUT/meta.txt"
+echo "ddp_port=$DDP_PORT gpus=$DDP_GPUS nproc=$NPROC duration=${DEMO_DURATION_SEC}s" >>"$OUT/meta.txt"
 
 CUDA_VISIBLE_DEVICES="$DDP_GPUS" \
   PROBING=1 PROBING_PORT="$DDP_PORT" PROBING_SPAN_BACKENDS=memtable \
   PROBING_ASSETS_ROOT="$PROBING_ASSETS_ROOT" \
-  DEMO_DURATION_SEC="$DEMO_DURATION_SEC" \
-  torchrun --nproc_per_node=2 --master_port=29517 \
+  DEMO_DURATION_SEC="$DEMO_DURATION_SEC" STRAGGLER_RANK=2 \
+  torchrun --nproc_per_node="$NPROC" --master_port=29517 \
   "$ROOT/scripts/demo_ddp_train_viz.py" \
   >"$LOG/ddp_train.log" 2>&1 &
 DDP_LAUNCHER=$!
@@ -57,33 +58,45 @@ find_ddp_worker_pid() {
   return 1
 }
 
-echo "等待 DDP 训练产生 train.step span..."
-R0="" R1=""
+echo "等待 ${NPROC} 卡 DDP 训练产生 train.step span (GPUs=$DDP_GPUS)..."
 CLI="$ROOT/probing/target/release/probing-cli"
-for _ in $(seq 1 90); do
-  R0=$(find_ddp_worker_pid 0 || true)
-  R1=$(find_ddp_worker_pid 1 || true)
-  if [[ -n "$R0" && -n "$R1" ]]; then
-    N0=$(PROBING_CLI_MODE=1 "$CLI" -t "$R0" query --format json \
-      "SELECT 1 FROM python.trace_event WHERE name='train.step' LIMIT 1" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d else 1)" 2>/dev/null && echo ok || echo "")
-    N1=$(PROBING_CLI_MODE=1 "$CLI" -t "$R1" query --format json \
-      "SELECT 1 FROM python.trace_event WHERE name='train.step' LIMIT 1" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d else 1)" 2>/dev/null && echo ok || echo "")
-    if [[ "$N0" == ok && "$N1" == ok ]]; then
+PIDS=()
+for _ in $(seq 1 120); do
+  PIDS=()
+  ready=0
+  for r in $(seq 0 $((NPROC - 1))); do
+    pid=$(find_ddp_worker_pid "$r" || true)
+    if [[ -z "$pid" ]]; then
+      ready=0
       break
     fi
+    if PROBING_CLI_MODE=1 "$CLI" -t "$pid" query --format json \
+      "SELECT 1 FROM python.trace_event WHERE name='train.step' LIMIT 1" 2>/dev/null \
+      | python3 -c "import json,sys; d=json.load(sys.stdin); sys.exit(0 if d else 1)" 2>/dev/null; then
+      PIDS+=("$pid")
+      ready=$((ready + 1))
+    else
+      ready=0
+      break
+    fi
+  done
+  if [[ "$ready" -eq "$NPROC" ]]; then
+    break
   fi
   sleep 2
 done
 
-if [[ -z "$R0" || -z "$R1" ]]; then
-  echo "未找到 2 个 DDP worker，查看 $LOG/ddp_train.log"
-  tail -40 "$LOG/ddp_train.log"
+if [[ "${#PIDS[@]}" -ne "$NPROC" ]]; then
+  echo "未找齐 ${NPROC} 个 DDP worker，查看 $LOG/ddp_train.log"
+  tail -50 "$LOG/ddp_train.log"
   exit 1
 fi
-echo "ddp_rank0_pid=$R0 ddp_rank1_pid=$R1" >>"$OUT/meta.txt"
+
+PID_CSV=$(IFS=,; echo "${PIDS[*]}")
+echo "ddp_pids=$PID_CSV world_size=$NPROC" >>"$OUT/meta.txt"
 
 HTML="$OUT/web_training_heatmap_render.html"
-RENDER_JSON=$(python3 "$ROOT/scripts/render_step_heatmap.py" --cli "$CLI" --pids "$R0,$R1" "$HTML")
+RENDER_JSON=$(python3 "$ROOT/scripts/render_step_heatmap.py" --cli "$CLI" --pids "$PID_CSV" "$HTML")
 sleep 2
 "$CHROME" --headless --disable-gpu --no-sandbox \
   --window-size=1440,900 \
@@ -99,4 +112,4 @@ d=json.load(sys.stdin)
 print(f\"step_matrix ranks={d.get('rank_count')} steps={d.get('step_count')} samples={d.get('samples')}\")
 " | tee -a "$OUT/meta.txt"
 
-echo "热力图素材: $OUT/web_training_heatmap.png (日志 $LOG)"
+echo "热力图素材: $OUT/web_training_heatmap.png (${NPROC} GPU, 日志 $LOG)"

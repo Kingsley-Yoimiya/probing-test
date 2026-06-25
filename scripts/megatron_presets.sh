@@ -40,12 +40,13 @@ declare -A PRESET_DESC=(
   [gpt345m_tp2]="GPT-345M + TP=2"
   [gpt126m_pp2]="GPT-126M + PP=2 (12L/512H/8H)"
   [gpt126m_2dp]="GPT-126M 2-GPU DP (TP1 PP1 world=2)"
+  [gpt126m_4dp]="GPT-126M 4-GPU DP (TP1 PP1 world=4)"
 )
 
 preset_args() {
   local name=$1
   case "$name" in
-    gpt126m)
+    gpt126m|gpt126m_2dp|gpt126m_4dp)
       echo --num-layers 12 --hidden-size 768 --num-attention-heads 12 \
         --seq-length 1024 --max-position-embeddings 1024 \
         --micro-batch-size 2 --global-batch-size 8 \
@@ -104,6 +105,7 @@ nproc_for_preset() {
   local name=$1
   case "$name" in
     gpt345m_tp2|gpt126m_pp2|gpt126m_2dp) echo 2 ;;
+    gpt126m_4dp) echo 4 ;;
     *) echo 1 ;;
   esac
 }
@@ -113,6 +115,7 @@ gpu_for_preset() {
   case "$name" in
     gpt345m_tp2) echo "0,1" ;;
     gpt126m_pp2|gpt126m_2dp) echo "1,3" ;;
+    gpt126m_4dp) echo "1,2,3,0" ;;
     *) echo "1" ;;
   esac
 }

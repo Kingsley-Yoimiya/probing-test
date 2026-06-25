@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""2-GPU DDP 小训练，供 Training 页 Step × Rank straggler 热力图采集。"""
+"""多卡 DDP 小训练，供 Training 页 Step × Rank straggler 热力图采集。"""
 from __future__ import annotations
 
 import os
@@ -51,9 +51,18 @@ def main() -> None:
     if rank == 0:
         print("attach_training_phases ok", flush=True)
 
+    straggler_rank = int(os.environ.get("STRAGGLER_RANK", "2"))
+    straggler_mod = int(os.environ.get("STRAGGLER_MOD", "4"))
+    world = dist.get_world_size()
     deadline = time.time() + duration
     step = 0
     batch_size = 32
+    if rank == 0:
+        print(
+            f"  world_size={world} straggler_rank={straggler_rank} "
+            f"(rank {straggler_rank} 周期性加慢)",
+            flush=True,
+        )
     with probing.span("training_loop"):
         while time.time() < deadline:
             x = torch.randn(batch_size, 128, device=device)
@@ -63,8 +72,10 @@ def main() -> None:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            if rank == 1 and step % 4 == 2:
+            if rank == straggler_rank and step % straggler_mod == 2:
                 time.sleep(STRAGGLER_EXTRA_SEC)
+            elif rank == (straggler_rank + 1) % world and step % 7 == 5:
+                time.sleep(STRAGGLER_EXTRA_SEC * 0.45)
             time.sleep(SLEEP_SEC)
             if rank == 0 and step % 15 == 0:
                 print(

@@ -1,7 +1,7 @@
 # Probing 可视化与展示方式指南
 
 > **文档版本**：2026-06-25（完整 Web UI 版）  
-> **素材目录**：[`assets/latest/`](assets/latest/)  
+> **素材目录**：[`./assets/latest/`](./assets/latest/)（相对本文档；GitHub 预览请直接打开本文件）  
 > **环境**：Probing v0.2.5 源码构建、Dioxus Web UI 已构建、4× RTX A6000
 
 本文档汇总 Probing 全部主要展示方式：**CLI 终端**、**Web 工作台**、**实时 Span 日志**，含用法说明与本次重跑实验的**真实截图**。可直接转发。
@@ -77,7 +77,7 @@ bash scripts/setup_visualization_docs.sh
 probing list -v
 ```
 
-![CLI list](assets/latest/cli_list.png)
+![CLI list](./assets/latest/cli_list.png)
 
 ---
 
@@ -96,13 +96,13 @@ ORDER BY s.time DESC LIMIT 15"
 
 支持 `--format json|csv`。默认输出 ASCII 表格：
 
-![CLI query trace](assets/latest/cli_query_trace.png)
+![CLI query trace](./assets/latest/cli_query_trace.png)
 
 ---
 
 ### 3.3 表目录 — `probing tables`
 
-![CLI tables](assets/latest/cli_tables.png)
+![CLI tables](./assets/latest/cli_tables.png)
 
 ---
 
@@ -110,7 +110,7 @@ ORDER BY s.time DESC LIMIT 15"
 
 Host RSS + GPU 显存双表：
 
-![CLI memory](assets/latest/cli_memory.png)
+![CLI memory](./assets/latest/cli_memory.png)
 
 ---
 
@@ -118,7 +118,7 @@ Host RSS + GPU 显存双表：
 
 Python 帧 + C/C++ 帧混合输出：
 
-![CLI backtrace](assets/latest/cli_backtrace.png)
+![CLI backtrace](./assets/latest/cli_backtrace.png)
 
 ---
 
@@ -129,9 +129,15 @@ probing -t <pid> skill list
 probing -t <pid> skill run module_bottleneck
 ```
 
-![CLI skill help](assets/latest/cli_skill_help.png)
+![CLI skill help](./assets/latest/cli_skill_help.png)
 
-![CLI skill list](assets/latest/cli_skill_list.png)
+![CLI skill list](./assets/latest/cli_skill_list.png)
+
+### 3.7 探针配置 — `probing config`
+
+查看当前进程侧 probing 配置项（与 Web `/config` 同源）：
+
+![CLI config](./assets/latest/cli_config.png)
 
 ---
 
@@ -141,7 +147,7 @@ probing -t <pid> skill run module_bottleneck
 PROBING=1 PROBING_SPAN_BACKENDS=memtable,logger python scripts/demo_train_viz.py
 ```
 
-![Span logger](assets/latest/cli_span_logger.png)
+![Span logger](./assets/latest/cli_span_logger.png)
 
 ---
 
@@ -151,7 +157,7 @@ PROBING=1 PROBING_SPAN_BACKENDS=memtable,logger python scripts/demo_train_viz.py
 
 进程概览、CPU 柱状图、Top 线程表（可点 Stack / Spans / Profile）：
 
-![Web Dashboard](assets/latest/web_dashboard.png)
+![Web Dashboard](./assets/latest/web_dashboard.png)
 
 ---
 
@@ -159,7 +165,7 @@ PROBING=1 PROBING_SPAN_BACKENDS=memtable,logger python scripts/demo_train_viz.py
 
 `python.trace_event` 层级 span，支持 step / trace 过滤：
 
-![Web Spans](assets/latest/web_spans.png)
+![Web Spans](./assets/latest/web_spans.png)
 
 ---
 
@@ -181,11 +187,11 @@ Training 页的核心不是 Profiling 那种 Chrome trace **时间线**，而是
 
 **单卡 demo（柱状图）：**
 
-![Web Training demo](assets/latest/web_training.png)
+![Web Training demo](./assets/latest/web_training.png)
 
 **2-GPU DDP straggler 热力图**（数据来自 live `step_matrix` API，rank 1 人为加慢模拟 outlier）：
 
-![Step straggler heatmap](assets/latest/web_training_heatmap.png)
+![Step straggler heatmap](./assets/latest/web_training_heatmap.png)
 
 复现热力图素材：
 
@@ -203,15 +209,15 @@ bash scripts/capture_training_heatmap.sh
 | `/profiling/pprof` | CPU 火焰图 |
 | `/profiling/trace` | Chrome trace 时间线 |
 
-![Profiling pprof](assets/latest/web_profiling_pprof.png)
+![Profiling pprof](./assets/latest/web_profiling_pprof.png)
 
-![Profiling trace](assets/latest/web_profiling_trace.png)
+![Profiling trace](./assets/latest/web_profiling_trace.png)
 
 ---
 
 ### 5.5 Analytics — `/analytics`
 
-![Web Analytics](assets/latest/web_analytics.png)
+![Web Analytics](./assets/latest/web_analytics.png)
 
 ---
 
@@ -219,7 +225,7 @@ bash scripts/capture_training_heatmap.sh
 
 函数级 live trace / eval：
 
-![Web Python](assets/latest/web_python.png)
+![Web Python](./assets/latest/web_python.png)
 
 ---
 
@@ -227,13 +233,19 @@ bash scripts/capture_training_heatmap.sh
 
 Playbook 快捷按钮 + 自然语言诊断（可选 LLM）：
 
-![Web Agent](assets/latest/web_agent.png)
+![Web Agent](./assets/latest/web_agent.png)
 
 ---
 
 ### 5.8 SQL REPL — ⌘K
 
-任意页面按 **⌘K / Ctrl+K** 打开 Command Panel，输入 SQL 即查 memtable（与 `probing query` 等价）。
+任意页面按 **⌘K / Ctrl+K** 打开 Command Panel，输入 SQL 即查 memtable（与 `probing query` 等价）。界面与 Dashboard 同壳层，无单独路由；操作入口见 Dashboard 截图顶栏。
+
+### 5.9 Cluster 联邦查询 — CLI / Web
+
+跨 rank 合并 SQL（需 torchrun 集群注册或 `cluster query`）：
+
+![CLI Megatron query](./assets/latest/cli_megatron_query.png)
 
 ---
 
@@ -246,11 +258,15 @@ PROBING=1 PROBING_PORT=8766 PROBING_ASSETS_ROOT=probing/web/dist \
 
 **Dashboard**（可见 torchrun / pt_elastic 线程 CPU）：
 
-![Megatron Dashboard](assets/latest/web_megatron_dashboard.png)
+![Megatron Dashboard](./assets/latest/web_megatron_dashboard.png)
 
 **Training 页**（未挂 `attach_training_phases` 时 step matrix API 可能 500，属预期）：
 
-![Megatron Training](assets/latest/web_megatron_training.png)
+![Megatron Training](./assets/latest/web_megatron_training.png)
+
+**Distributed Spans**（Megatron `pretrain_gpt.py` 进程）：
+
+![Megatron Spans](./assets/latest/web_megatron_spans.png)
 
 ---
 
@@ -263,6 +279,7 @@ PROBING=1 PROBING_PORT=8766 PROBING_ASSETS_ROOT=probing/web/dist \
 | `scripts/capture_viz_demo.sh` | 自动采集 CLI + Web 截图 |
 | `scripts/capture_training_heatmap.sh` | 2-GPU DDP + Step×Rank 热力图截图 |
 | `scripts/setup_visualization_docs.sh` | 上述全部一键执行 |
+| `scripts/verify_doc_assets.sh` | 校验本文档图片路径与 `latest/` 文件一致 |
 
 Demo 训练：
 
@@ -296,6 +313,31 @@ PROBING=1 python probing/examples/tracing.py
 
 - [probing/probing/server/API.md](../probing/probing/server/API.md)
 - [probing/web/DESIGN.md](../probing/web/DESIGN.md)
-- Megatron 矩阵报告：[logs/megatron_matrix_20260625_003950/REPORT.md](../logs/megatron_matrix_20260625_003950/REPORT.md)
+- 本仓库 Megatron 测试计划：[experiment-plan.md](../experiment-plan.md)
 
-**本次采集时间戳**：见 [`assets/latest/meta.txt`](assets/latest/meta.txt) 中的 `CAPTURE_ID`
+### 9.1 素材清单（`docs/assets/latest/`）
+
+| 文件 | 对应章节 |
+|------|----------|
+| `cli_list.png` | §3.1 进程列表 |
+| `cli_query_trace.png` | §3.2 SQL 查询 |
+| `cli_tables.png` | §3.3 表目录 |
+| `cli_memory.png` | §3.4 内存时序 |
+| `cli_backtrace.png` | §3.5 混合栈回溯 |
+| `cli_skill_help.png` / `cli_skill_list.png` | §3.6 诊断 Skill |
+| `cli_config.png` | §3.7 探针配置 |
+| `cli_span_logger.png` | §4 Span 实时日志 |
+| `cli_megatron_query.png` | §5.9 Cluster 联邦 |
+| `web_dashboard.png` | §5.1 Dashboard |
+| `web_spans.png` | §5.2 Distributed Spans |
+| `web_training.png` | §5.3 Training（单卡柱状图） |
+| `web_training_heatmap.png` | §5.3 Training（多卡热力图） |
+| `web_profiling_pprof.png` / `web_profiling_trace.png` | §5.4 Profiling |
+| `web_analytics.png` | §5.5 Analytics |
+| `web_python.png` | §5.6 Python |
+| `web_agent.png` | §5.7 Investigate Agent |
+| `web_megatron_dashboard.png` | §6 Megatron Dashboard |
+| `web_megatron_training.png` | §6 Megatron Training |
+| `web_megatron_spans.png` | §6 Megatron Spans |
+
+**本次采集时间戳**：见 [`./assets/latest/meta.txt`](./assets/latest/meta.txt) 中的 `CAPTURE_ID` / `CAPTURE_HEATMAP_ID`

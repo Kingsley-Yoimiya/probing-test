@@ -16,5 +16,9 @@ unset PROBING_CLI_MODE
 bash scripts/capture_viz_demo.sh
 
 echo ""
+echo "=== [3/3] 校验文档素材引用 ==="
+bash scripts/verify_doc_assets.sh
+
+echo ""
 echo "完成。文档：docs/probing-visualization-guide.md"
 echo "素材：docs/assets/latest/（含 web_training_heatmap.png）"

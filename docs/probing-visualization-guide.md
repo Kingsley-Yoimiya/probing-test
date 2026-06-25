@@ -264,9 +264,13 @@ PROBING=1 PROBING_PORT=8766 PROBING_ASSETS_ROOT=probing/web/dist \
 
 ![Megatron Training](./assets/latest/web_megatron_training.png)
 
-**Distributed Spans**（Megatron `pretrain_gpt.py` 进程）：
+**Distributed Spans**（Megatron `pretrain_gpt.py` 进程；需在训练仍在运行时打开 `/spans`）：
 
 ![Megatron Spans](./assets/latest/web_megatron_spans.png)
+
+Megatron 默认未写入 `python.trace_event` span，因此 Spans 页可能为空（上图即此情况）。若需层级 span，请参考 §5.2 的 demo 训练截图，或在 Megatron 中接入 `probing.attach_training_phases` / 手动 `probing.span()`。
+
+> 旧版素材若在 Megatron 已退出后采集 `/spans`，会出现 Chrome「This site can't be reached」；可运行 `bash scripts/capture_megatron_web.sh` 重采（脚本会 **优先** 截 `/spans`）。
 
 ---
 
@@ -277,6 +281,7 @@ PROBING=1 PROBING_PORT=8766 PROBING_ASSETS_ROOT=probing/web/dist \
 | `scripts/build_frontend_docker.sh` | Docker 内构建 Web UI |
 | `scripts/demo_train_viz.py` | 带 phase hook 的小训练（span 最全） |
 | `scripts/capture_viz_demo.sh` | 自动采集 CLI + Web 截图 |
+| `scripts/capture_megatron_web.sh` | 单独重采 Megatron Dashboard/Training/Spans |
 | `scripts/capture_training_heatmap.sh` | 2-GPU DDP + Step×Rank 热力图截图 |
 | `scripts/setup_visualization_docs.sh` | 上述全部一键执行 |
 | `scripts/verify_doc_assets.sh` | 校验本文档图片路径与 `latest/` 文件一致 |

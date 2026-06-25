@@ -113,7 +113,7 @@ PROBING=1 PROBING_PORT="$MEGA_PORT" PROBING_ASSETS_ROOT="$PROBING_ASSETS_ROOT" \
   torchrun --nproc_per_node=1 --master_port=29501 \
   "$MEGATRON_ROOT/pretrain_gpt.py" \
   "${MEGATRON_COMMON[@]}" "${nproc_args[@]}" \
-  --train-iters 40 --exit-interval 40 \
+  --train-iters 80 --exit-interval 80 \
   >"$MEGA_LOG/train.log" 2>&1 &
 MEGA_LAUNCHER=$!
 
@@ -142,10 +142,10 @@ done
 # Megatron 训练很快，就绪后立即截图（避免 demo Web 截图期间 Megatron 已退出）
 if [[ -n "$MEGA_PROBE_PID" ]]; then
   MEGA_BASE="http://127.0.0.1:$MEGA_PORT"
-  echo "[1b/4] Megatron 训练进行中，优先采集 Web 截图"
+  echo "[1b/4] Megatron 训练进行中，优先采集 Web 截图（/spans 最先，避免进程先退出）"
+  shot "$MEGA_BASE/spans" "$OUT/web_megatron_spans.png" 18
   shot "$MEGA_BASE/" "$OUT/web_megatron_dashboard.png" 12
   shot "$MEGA_BASE/training" "$OUT/web_megatron_training.png" 15
-  shot "$MEGA_BASE/spans" "$OUT/web_megatron_spans.png" 12
 fi
 
 echo "[2/4] 采集 CLI 输出"

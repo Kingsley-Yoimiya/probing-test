@@ -1,0 +1,29 @@
+sending ctrl commands via unix socket...
+┌─────────────────────────┬─────────────────────────┬──────────────────────────┐
+│ table_schema            │ table_name              │ table_type               │
+├─────────────────────────┼─────────────────────────┼──────────────────────────┤
+│ cluster                 │ nodes                   │ BASE TABLE               │
+│ cluster                 │ nodes                   │ BASE TABLE               │
+│ cpu                     │ tasks                   │ BASE TABLE               │
+│ cpu                     │ tasks                   │ BASE TABLE               │
+│ cpu                     │ utilization             │ BASE TABLE               │
+│ cpu                     │ utilization             │ BASE TABLE               │
+│ gpu                     │ devices                 │ BASE TABLE               │
+│ gpu                     │ devices                 │ BASE TABLE               │
+│ gpu                     │ utilization             │ BASE TABLE               │
+│ gpu                     │ utilization             │ BASE TABLE               │
+│ probing                 │ column_docs             │ BASE TABLE               │
+│ probing                 │ column_docs             │ BASE TABLE               │
+│ probing                 │ table_docs              │ BASE TABLE               │
+│ probing                 │ table_docs              │ BASE TABLE               │
+│ process                 │ envs                    │ BASE TABLE               │
+│ process                 │ envs                    │ BASE TABLE               │
+│ process                 │ kmsg                    │ BASE TABLE               │
+│ process                 │ kmsg                    │ BASE TABLE               │
+│ python                  │ backtrace               │ BASE TABLE               │
+│ python                  │ backtrace               │ BASE TABLE               │
+│ python                  │ trace_event             │ BASE TABLE               │
+│ python                  │ trace_event             │ BASE TABLE               │
+│ rdma                    │ mlx_hca                 │ BASE TABLE               │
+│ rdma                    │ mlx_hca                 │ BASE TABLE               │
+└─────────────────────────┴─────────────────────────┴──────────────────────────┘

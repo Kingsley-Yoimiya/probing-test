@@ -17,8 +17,9 @@ venv/
 **/dist/
 !probing/web/dist/
 
-# 实验运行产物（保留 latest/）
+# 历史采集归档（文档固定引用 docs/assets/latest/）
 docs/assets/run_*/
+docs/assets/latest/*_render.html
 
 # IDE / 工具
 .idea/

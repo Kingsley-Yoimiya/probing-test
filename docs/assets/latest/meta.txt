@@ -1,0 +1,10 @@
+CAPTURE_ID=20260625_093700
+demo_pid=2635085 web_ui=/home/yjr/probing-test/probing/web/dist
+megatron_probe_pid=2635089 mega_port=8766
+ASSETS_DIR=/home/yjr/probing-test/docs/assets/latest
+CAPTURE_HEATMAP_ID=20260625_104027
+ddp_port=8767 gpus=2,3 duration=90s
+CAPTURE_HEATMAP_ID=20260625_104558
+ddp_port=8767 gpus=2,3 duration=75s
+ddp_rank0_pid=2685081 ddp_rank1_pid=2685082
+step_matrix ranks=2 steps=8 samples=15

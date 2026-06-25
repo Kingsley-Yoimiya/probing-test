@@ -11,10 +11,10 @@ else
   echo "web/dist 已存在，跳过构建（删除 web/dist 可强制重建）"
 fi
 
-echo "=== [2/2] 采集 CLI + Web 截图 ==="
+echo "=== [2/3] 采集 CLI + Web 截图 + 热力图 ==="
 unset PROBING_CLI_MODE
 bash scripts/capture_viz_demo.sh
 
 echo ""
 echo "完成。文档：docs/probing-visualization-guide.md"
-echo "素材：docs/assets/latest/"
+echo "素材：docs/assets/latest/（含 web_training_heatmap.png）"

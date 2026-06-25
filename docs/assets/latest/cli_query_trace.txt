@@ -1,0 +1,20 @@
+sending ctrl commands via unix socket...
+┌─────────────────────────┬─────────────────────────┬──────────────────────────┐
+│ name                    │ phase                   │ ms                       │
+├─────────────────────────┼─────────────────────────┼──────────────────────────┤
+│ optimizer               │ optimizer               │ 0.91                     │
+│ backward                │ backward                │ 0.63                     │
+│ forward                 │ forward                 │ 1.33                     │
+│ train.step              │                         │ 4.94                     │
+│ optimizer               │ optimizer               │ 0.8                      │
+│ backward                │ backward                │ 0.57                     │
+│ forward                 │ forward                 │ 0.97                     │
+│ train.step              │                         │ 4.77                     │
+│ optimizer               │ optimizer               │ 0.96                     │
+│ backward                │ backward                │ 0.42                     │
+│ forward                 │ forward                 │ 0.94                     │
+│ train.step              │                         │ 4.09                     │
+│ optimizer               │ optimizer               │ 0.81                     │
+│ backward                │ backward                │ 0.57                     │
+│ forward                 │ forward                 │ 1.18                     │
+└─────────────────────────┴─────────────────────────┴──────────────────────────┘

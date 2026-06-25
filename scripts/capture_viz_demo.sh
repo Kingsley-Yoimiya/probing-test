@@ -6,12 +6,15 @@ ROOT="/home/yjr/probing-test"
 VENV="$ROOT/probing/.venv"
 CLI="$ROOT/probing/target/release/probing-cli"
 TS=$(date +%Y%m%d_%H%M%S)
-OUT="$ROOT/docs/assets/run_$TS"
+OUT="$ROOT/docs/assets/latest"
 LOG="$ROOT/logs/visualization_demo_$TS"
 WEB_PORT="${WEB_PORT:-8765}"
 GPU="${CUDA_VISIBLE_DEVICES:-1}"
 
 mkdir -p "$OUT" "$LOG"
+# 固定目录写入，避免软链接导致 GitHub 无法预览图片
+find "$OUT" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+echo "CAPTURE_ID=$TS" >"$OUT/meta.txt"
 source "$VENV/bin/activate"
 unset CONDA_PREFIX CONDA_DEFAULT_ENV PROBING_CLI_MODE
 export CUDA_VISIBLE_DEVICES="$GPU"
@@ -102,7 +105,7 @@ PROBING=1 PROBING_PORT="$WEB_PORT" PROBING_SPAN_BACKENDS=memtable,logger \
   DEMO_DURATION_SEC=600 python "$ROOT/scripts/demo_train_viz.py" \
   >"$LOG/demo_train.log" 2>&1 &
 DEMO_PID=$!
-echo "demo_pid=$DEMO_PID web_ui=$PROBING_ASSETS_ROOT" | tee "$OUT/meta.txt"
+echo "demo_pid=$DEMO_PID web_ui=$PROBING_ASSETS_ROOT" >>"$OUT/meta.txt"
 
 # shellcheck disable=SC2046
 nproc_args=( $(preset_args gpt345m) )
@@ -176,6 +179,10 @@ shot "$BASE/analytics" "$OUT/web_analytics.png" 15
 shot "$BASE/python" "$OUT/web_python.png" 15
 shot "$BASE/agent" "$OUT/web_agent.png" 15
 
+echo "[3b/4] 采集 2-GPU Step straggler 热力图"
+DDP_GPUS="${DDP_GPUS:-2,3}" DDP_PORT="${DDP_PORT:-8767}" DEMO_DURATION_SEC="${HEATMAP_DEMO_SEC:-90}" \
+  bash "$ROOT/scripts/capture_training_heatmap.sh" || echo "警告: 热力图采集失败，见 logs/heatmap_demo_*"
+
 if [[ -f "$LOG/demo_train.log" ]]; then
   grep -E "→ |phase=|batch=" "$LOG/demo_train.log" | tail -35 >"$OUT/cli_span_logger.txt" || true
   if [[ -s "$OUT/cli_span_logger.txt" ]]; then
@@ -202,6 +209,5 @@ kill "$DEMO_PID" 2>/dev/null || true
 wait "$DEMO_PID" 2>/dev/null || true
 [[ -n "$MEGA_LAUNCHER" ]] && wait "$MEGA_LAUNCHER" 2>/dev/null || true
 
-ln -sfn "$OUT" "$ROOT/docs/assets/latest"
-echo "ASSETS_DIR=$OUT" | tee -a "$OUT/meta.txt"
-echo "采集完成: $OUT"
+echo "ASSETS_DIR=$OUT" >>"$OUT/meta.txt"
+echo "采集完成: $OUT (CAPTURE_ID=$TS, 日志 $LOG)"

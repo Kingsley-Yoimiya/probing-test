@@ -22,7 +22,7 @@
 | 8 | 火焰图 | `probing flamegraph` / Web Profiling | pprof / torch |
 | 9 | Dashboard | Web `/` | CPU/GPU/RSS/线程 |
 | 10 | Distributed Spans | Web `/spans` | trace_event 层级树 |
-| 11 | Training | Web `/training` | step 热力图、comm、模块热点 |
+| 11 | Training | Web `/training` | 单卡 step 柱状图；多卡 **Step×Rank 热力图**（straggler） |
 | 12 | Analytics | Web `/analytics` | 跨表分析 |
 | 13 | Python Live Trace | Web `/python` | 函数级 live 变量 |
 | 14 | Investigate Agent | Web `/agent` 或 ⌘J | Playbook + 可选 LLM |
@@ -165,9 +165,34 @@ PROBING=1 PROBING_SPAN_BACKENDS=memtable,logger python scripts/demo_train_viz.py
 
 ### 5.3 Training — `/training`
 
-Step 时序、Module Hotspots、Collective Communications（需 `attach_training_phases` 写入 `train.step`）：
+Training 页的核心不是 Profiling 那种 Chrome trace **时间线**，而是 **step 耗时矩阵**：
+
+| 场景 | UI 形态 | 说明 |
+|------|---------|------|
+| **单进程 / 单 rank** | 柱状图（Step timings） | 每个 step 一根竖条，红色表示超过窗口均值 1.2× |
+| **多 rank（DDP/torchrun）** | **Step straggler heatmap** | 行=rank、列=step，颜色越深越慢，红圈=outlier |
+| 任意 | Module Hotspots / Collective | 模块 hook 排行、NCCL collective 表 |
+
+多卡热力图需要：
+
+1. `probing.attach_training_phases(model, optimizer)` 写入 `train.step` span  
+2. `WORLD_SIZE > 1`（如 `torchrun --nproc_per_node=2`）  
+3. Web UI 切到 **Cluster** 并扫描，或调用 `GET /apis/training/step_matrix?cluster=true`
+
+**单卡 demo（柱状图）：**
 
 ![Web Training demo](assets/latest/web_training.png)
+
+**2-GPU DDP straggler 热力图**（数据来自 live `step_matrix` API，rank 1 人为加慢模拟 outlier）：
+
+![Step straggler heatmap](assets/latest/web_training_heatmap.png)
+
+复现热力图素材：
+
+```bash
+bash scripts/capture_training_heatmap.sh
+# 或一键：bash scripts/setup_visualization_docs.sh（含完整采集）
+```
 
 ---
 
@@ -236,6 +261,7 @@ PROBING=1 PROBING_PORT=8766 PROBING_ASSETS_ROOT=probing/web/dist \
 | `scripts/build_frontend_docker.sh` | Docker 内构建 Web UI |
 | `scripts/demo_train_viz.py` | 带 phase hook 的小训练（span 最全） |
 | `scripts/capture_viz_demo.sh` | 自动采集 CLI + Web 截图 |
+| `scripts/capture_training_heatmap.sh` | 2-GPU DDP + Step×Rank 热力图截图 |
 | `scripts/setup_visualization_docs.sh` | 上述全部一键执行 |
 
 Demo 训练：
@@ -272,4 +298,4 @@ PROBING=1 python probing/examples/tracing.py
 - [probing/web/DESIGN.md](../probing/web/DESIGN.md)
 - Megatron 矩阵报告：[logs/megatron_matrix_20260625_003950/REPORT.md](../logs/megatron_matrix_20260625_003950/REPORT.md)
 
-**本次采集 ID**：见 [`assets/latest/meta.txt`](assets/latest/meta.txt)
+**本次采集时间戳**：见 [`assets/latest/meta.txt`](assets/latest/meta.txt) 中的 `CAPTURE_ID`

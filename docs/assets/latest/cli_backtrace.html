@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset=utf-8>
+<style>body{background:#0d1117;color:#c9d1d9;font:13px/1.45 ui-monospace,Menlo,Consolas,monospace;margin:16px;white-space:pre-wrap;}</style></head>
+<body>sending ctrl commands via unix socket...
+[C/C++] 0x7b51ab45ae1f, file: :0
+	backtrace::backtrace::trace_unsynchronized::hce91133b6de0dc75
+
+[C/C++] 0x7b51ab45ae49, file: :0
+	backtrace::backtrace::trace::h6c1292c980c6880d
+
+[C/C++] 0x7b51ab38effc, file: :0
+	probing_python::features::stack_tracer::SignalTracer::get_native_stacks::h2a3582575f6c08f2
+
+[C/C++] 0x7b51ab38f84c, file: :0
+	probing_python::features::stack_tracer::backtrace_signal_handler::hc867cbb4187c0b81
+
+[C/C++] 0x7b51ab697966, file: :0
+	signal_hook_registry::handler::h4d71499db2bd261d
+
+[C/C++] 0x7b51ae2e57f8, file: ./time/../sysdeps/unix/sysv/linux/clock_nanosleep.c:78
+	__GI___clock_nanosleep
+
+[C/C++] 0x58afb3e3b3a8, file: /usr/local/src/conda/python-3.12.2/Modules/timemodule.c:2182
+	pysleep
+
+[C/C++] 0x58afb3e3b3a8, file: /usr/local/src/conda/python-3.12.2/Modules/timemodule.c:425
+	time_sleep
+
+[Python] file: /home/yjr/probing-test/scripts/demo_train_viz.py:50 func: main
+	locals:
+
+[C/C++] 0x7b51ab379d35, file: :0
+	std::thread::local::LocalKey&lt;T&gt;::with::h1eba086fa05af270
+
+[C/C++] 0x7b51ab4a9fd4, file: :0
+	probing_python::features::vm_tracer::rust_eval_frame::h177855c6dfedb52a
+
+[C/C++] 0x58afb3d0adff, file: /usr/local/src/conda/python-3.12.2/Include/internal/pycore_call.h:92
+	_PyObject_VectorcallTstate
+
+[C/C++] 0x58afb3d0adff, file: /usr/local/src/conda/python-3.12.2/Objects/call.c:325
+	PyObject_Vectorcall
+
+[Python] file: /home/yjr/probing-test/scripts/demo_train_viz.py:1 func: &lt;module&gt;
+	locals:
+
+[C/C++] 0x7b51ab379d35, file: :0
+	std::thread::local::LocalKey&lt;T&gt;::with::h1eba086fa05af270
+
+[C/C++] 0x7b51ab4a9fd4, file: :0
+	probing_python::features::vm_tracer::rust_eval_frame::h177855c6dfedb52a
+
+[C/C++] 0x58afb3de245a, file: /usr/local/src/conda/python-3.12.2/Python/pythonrun.c:1722
+	run_eval_code_obj
+
+[C/C++] 0x58afb3dddacb, file: /usr/local/src/conda/python-3.12.2/Python/pythonrun.c:1743
+	run_mod
+
+[C/C++] 0x58afb3df4230, file: /usr/local/src/conda/python-3.12.2/Python/pythonrun.c:1643
+	pyrun_file
+
+[C/C++] 0x58afb3df3e0e, file: /usr/local/src/conda/python-3.12.2/Python/pythonrun.c:433
+	_PyRun_SimpleFileObject
+
+[C/C++] 0x58afb3df3684, file: /usr/local/src/conda/python-3.12.2/Python/pythonrun.c:78
+	_PyRun_AnyFileObject
+
+[C/C++] 0x58afb3ded6b2, file: /usr/local/src/conda/python-3.12.2/Modules/main.c:360
+	pymain_run_file_obj
+
+[C/C++] 0x58afb3ded6b2, file: /usr/local/src/conda/python-3.12.2/Modules/main.c:379
+	pymain_run_file
+
+[C/C++] 0x58afb3ded6b2, file: /usr/local/src/conda/python-3.12.2/Modules/main.c:629
+	pymain_run_python
+
+[C/C++] 0x58afb3ded6b2, file: /usr/local/src/conda/python-3.12.2/Modules/main.c:709
+	Py_RunMain
+
+[C/C++] 0x58afb3da9217, file: /usr/local/src/conda/python-3.12.2/Modules/main.c:763
+	Py_BytesMain
+
+[C/C++] 0x7b51ae229d90, file: ./csu/../sysdeps/nptl/libc_start_call_main.h:58
+	__libc_start_call_main
+
+[C/C++] 0x7b51ae229e40, file: ./csu/../csu/libc-start.c:392
+	__libc_start_main_impl
+
+</body></html>

@@ -1,0 +1,35 @@
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  batch=1180 loss=2.3015 step=1181
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook
+  → forward phase=forward source=phase_hook
+  → backward phase=backward source=phase_hook
+  → optimizer phase=optimizer source=phase_hook
+    → train.step source=phase_hook

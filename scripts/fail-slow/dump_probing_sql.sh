@@ -117,16 +117,25 @@ cpu_thresh = float("${HOST_PSI_CPU_RATE_THRESH:-200000}")
 # P3-EXT-B 短标定：fio randrw×8 的 io.some≈1.49e5 us/s，基线≈23 us/s。
 # 默认 5e4 仅用于识别该明显分离的压力窗；正式战役可用环境变量抬高。
 io_thresh = float("${HOST_PSI_IO_RATE_THRESH:-50000}")
+# P3-EXT-C（memory）：memory.some rate；默认阈值低于 CPU（内存压力 total 增量通常更小）
+mem_thresh = float("${HOST_PSI_MEM_RATE_THRESH:-50000}")
 cpu_hit = cpu_rate is not None and cpu_rate >= cpu_thresh
 io_hit = io_rate is not None and io_rate >= io_thresh
+mem_hit = mem_rate is not None and mem_rate >= mem_thresh
 io_dom = (io_rate or 0) > (cpu_rate or 0) * 0.5 and (io_rate or 0) > cpu_thresh * 0.5
 mem_dom_cpu = (mem_rate or 0) > (cpu_rate or 0) * 0.5 and (mem_rate or 0) > cpu_thresh * 0.5
 mem_dom_io = (mem_rate or 0) > (io_rate or 0) * 0.5 and (mem_rate or 0) > io_thresh * 0.5
+cpu_dom_mem = (cpu_rate or 0) > (mem_rate or 0) * 2.0 and (cpu_rate or 0) > cpu_thresh
 case = "$CASE"
 if case == "P3-EXT-B":
     hit = bool(io_hit and not mem_dom_io)
     evidence = "host_psi_io" if hit else "host_psi_io_no_hit"
     threshold = io_thresh
+elif case == "P3-EXT-C":
+    # 内存争用：要求 memory PSI 抬升，且不被纯 CPU 压力主导
+    hit = bool(mem_hit and not cpu_dom_mem)
+    evidence = "host_psi_memory" if hit else "host_psi_memory_no_hit"
+    threshold = mem_thresh
 else:
     hit = bool(cpu_hit and not io_dom and not mem_dom_cpu)
     evidence = "host_psi_cpu" if hit else "host_psi_no_hit"
@@ -139,6 +148,7 @@ hp = {
     "cpu_some_avg10_t1": avg10,
     "threshold_cpu_rate_us_s": cpu_thresh,
     "threshold_io_rate_us_s": io_thresh,
+    "threshold_mem_rate_us_s": mem_thresh,
     "threshold_rate_us_s": threshold,
     "hit": hit,
     "evidence": evidence,
@@ -154,6 +164,7 @@ lines = [
     f"cpu_some_avg10_t1={avg10}",
     f"threshold_cpu={cpu_thresh}",
     f"threshold_io={io_thresh}",
+    f"threshold_mem={mem_thresh}",
     f"threshold={threshold}",
     f"hit={hit}",
     f"evidence={hp['evidence']}",

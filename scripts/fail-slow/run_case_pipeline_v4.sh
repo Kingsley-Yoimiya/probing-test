@@ -71,7 +71,9 @@ CPU_LOAD=$(echo "$INJECT_ARGS" | grep -oE 'cpu_load=[0-9.]+' | cut -d= -f2 || tr
 CPU_N=$(echo "$INJECT_ARGS" | grep -oE 'cpu_n=[0-9]+' | cut -d= -f2 || true)
 # cpu_frac=0.5 → nproc/2（Quiet）
 CPU_FRAC=$(echo "$INJECT_ARGS" | grep -oE 'cpu_frac=[0-9.]+' | cut -d= -f2 || true)
-echo "  inject_parse DUTY=$DUTY SIZE=$SIZE FRAC=$FRAC CPU_LOAD=$CPU_LOAD CPU_N=${CPU_N:-} CPU_FRAC=${CPU_FRAC:-}"
+VM_N=$(echo "$INJECT_ARGS" | grep -oE 'vm_n=[0-9]+' | cut -d= -f2 || true); VM_N="${VM_N:-4}"
+VM_BYTES=$(echo "$INJECT_ARGS" | grep -oE 'vm_bytes=[0-9]+[KkMmGg]?' | cut -d= -f2 || true); VM_BYTES="${VM_BYTES:-2G}"
+echo "  inject_parse DUTY=$DUTY SIZE=$SIZE FRAC=$FRAC CPU_LOAD=$CPU_LOAD CPU_N=${CPU_N:-} CPU_FRAC=${CPU_FRAC:-} VM_N=$VM_N VM_BYTES=$VM_BYTES"
 
 MASTER="${PODS[0]}"
 MASTER_IP="$(pod_ip "$MASTER")"
@@ -217,7 +219,9 @@ start_sidecar() {   # 在 victim(node0)起注入; freq / 内联 8a 不走这里
       fi
       ;;
     stress_vm)
-      pexec "$v" "nohup stress-ng --vm 4 --vm-bytes 2G --timeout 600s >'$out/injection.log' 2>&1 & echo SC=\$!" 2>/dev/null ;;
+      # P3-EXT-C：主机内存带宽/NUMA；剂量由 INJECT_ARGS 的 vm_n / vm_bytes 控制
+      # --vm-keep + --page-in：持续触碰已分配页，避免只 alloc 不扫带宽
+      pexec "$v" "nohup stress-ng --vm $VM_N --vm-bytes $VM_BYTES --vm-keep --page-in --timeout 600s >'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START stress_vm_n=${VM_N}_bytes=${VM_BYTES}" 2>/dev/null ;;
     stress_io)
       # Loud：fio 与训练/ckpt 同盘；bite 标定 numjobs=4 仅 C1/C0≈1.08 → 提到 16 + iodepth
       pexec "$v" "mkdir -p '$IO_STRESS_DIR'; nohup fio --name=io_stress --rw=randrw --bs=4k --size=4G --numjobs=16 --iodepth=64 --time_based --runtime=600 --directory='$IO_STRESS_DIR' --group_reporting >'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START fio_loud_nj16" 2>/dev/null ;;
@@ -260,7 +264,7 @@ is_gpu_sidecar() {
 }
 stop_sidecar() {
   # 先 SIGTERM 让 sidecar 打 SIDECAR_STOP；再 -9。模式避免误杀 kubectl exec bash。
-  pexec "${PODS[0]}" 'pkill -TERM -f "[s]idecar_inject" 2>/dev/null || true; sleep 1; pkill -9 -f "[s]idecar_inject" 2>/dev/null || true; pkill -TERM -x stress-ng 2>/dev/null || true; pkill -9 -x stress-ng 2>/dev/null || true; pkill -f "fio.*io_stress" 2>/dev/null || true; pkill -f "[i]b_write_bw" 2>/dev/null || true; exit 0' 2>/dev/null || true
+  pexec "${PODS[0]}" 'pkill -TERM -f "[s]idecar_inject" 2>/dev/null || true; sleep 1; pkill -9 -f "[s]idecar_inject" 2>/dev/null || true; pkill -TERM stress-ng 2>/dev/null || true; sleep 1; pkill -9 stress-ng 2>/dev/null || true; pkill -9 -f "[s]tress-ng" 2>/dev/null || true; pkill -f "fio.*io_stress" 2>/dev/null || true; pkill -f "[i]b_write_bw" 2>/dev/null || true; exit 0' 2>/dev/null || true
   return 0
 }
 
@@ -307,7 +311,7 @@ wait_done() {   # $1=out_dir $2=是否按 stop marker 停 sidecar
 }
 
 # ===== configs (保留 C0-C4) — 用函数替代关联数组(兼容 bash 3.2) =====
-CONFIGS=("C0_baseline" "C1_inject_none" "C2_probing" "C3_greyhound" "C4_xputimer")
+CONFIGS=("C0_baseline" "C1_inject_none" "C2_probing" "C3_greyhound" "C4_xputimer" "C5_flight_recorder")
 config_denv() {   # $1=cfg → echo detect_env
   case "$1" in
     C0_baseline|C1_inject_none) echo "unset PROBING PROBING_TORCH_PROFILING PROBING_GPU; export PROBING=0;" ;;
@@ -324,6 +328,10 @@ config_denv() {   # $1=cfg → echo detect_env
       ;;
     C3_greyhound) echo "export LD_PRELOAD=$CODE_DIR/greyhound/libmcclprobe.so;" ;;
     C4_xputimer)  echo "export LD_PRELOAD=$CODE_DIR/xputimer/libxpu_timer_metax.so;" ;;
+    # Flight Recorder：环形缓冲；dump 需训练侧/进程退出时落盘。触发协议见 ledger（本战役标 oracle 若人工开窗）。
+    C5_flight_recorder)
+      echo "unset PROBING PROBING_TORCH_PROFILING; export PROBING=0; export TORCH_NCCL_TRACE_BUFFER_SIZE=\${TORCH_NCCL_TRACE_BUFFER_SIZE:-1048576}; export TORCH_NCCL_DUMP_ON_TIMEOUT=1;"
+      ;;
     *) echo "" ;;
   esac
 }

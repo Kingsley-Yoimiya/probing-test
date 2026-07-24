@@ -31,7 +31,8 @@ MODEL="${MODEL:-gpt2}"
 MODE="${MODE:-}"
 LOCAL_CODE="${LOCAL_CODE:-/workspace/probe-bundle}"
 LOCAL_OUT="${LOCAL_OUT:-/workspace/probe-bundle/out}"
-LOCAL_RESULT_ROOT="${LOCAL_RESULT_ROOT:-/Users/yinjinrun/Codespace/myportal/results/muxi-mohe/$RUN_ID}"
+# h3c 战役默认 muxi-h3c；mohe 可显式覆盖 LOCAL_RESULT_ROOT=.../muxi-mohe/$RUN_ID
+LOCAL_RESULT_ROOT="${LOCAL_RESULT_ROOT:-/Users/yinjinrun/Codespace/myportal/results/muxi-h3c/$RUN_ID}"
 ACCEPT_GATE="${ACCEPT_GATE:-0}"
 ACCEPT_SCRIPT="${ACCEPT_SCRIPT:-$HERE/accept_loud.py}"
 SIDECAR_WARMUP="${SIDECAR_WARMUP:-8}"
@@ -73,13 +74,25 @@ case "$CASE_ID" in
     IO_STRESS_DIR="${IO_STRESS_DIR:-/workspace/probe-bundle/io_stress}"
     export CKPT_EVERY FLUSH_EVERY IO_PAYLOAD IO_READ_KB IO_STRESS_DIR
     ;;
+  P3-EXT-C|9c)
+    CASE="P3-EXT-C"; INJECT_KIND="stress_vm"
+    INJECT_ARGS="${INJECT_ARGS:-vm_n=96,vm_bytes=6G}"
+    MODE="${MODE:-host_bound}"
+    ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+    ;;
   P3-SW-A|8a)
     CASE="P3-SW-A"; INJECT_KIND="8a"
     INJECT_ARGS="${INJECT_ARGS:-}"
     MODE="${MODE:-host_bound}"
     ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
     ;;
-  *) echo "unsupported CASE_ID=$CASE_ID (P1-EXT-A/B, P3-EXT-A/B, P3-SW-A)" >&2; exit 2 ;;
+  P3-SW-B|8b)
+    CASE="P3-SW-B"; INJECT_KIND="8b"
+    INJECT_ARGS="${INJECT_ARGS:-}"
+    MODE="${MODE:-host_bound}"
+    ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+    ;;
+  *) echo "unsupported CASE_ID=$CASE_ID (P1-EXT-A/B, P3-EXT-A/B/C, P3-SW-A/B)" >&2; exit 2 ;;
 esac
 
 run_config() {
@@ -131,6 +144,9 @@ for cfg in "${RUN_CFGS[@]}"; do
     C0_baseline) gid=0 ;;
     C1_inject_none) gid=1 ;;
     C2_probing) gid=2 ;;
+    C3_greyhound) gid=3 ;;
+    C4_xputimer) gid=4 ;;
+    C5_flight_recorder) gid=5 ;;
     *) gid=0 ;;
   esac
   # C2：可选闸门——C1 未达标则跳过，避免无效注入浪费 Probing 轮

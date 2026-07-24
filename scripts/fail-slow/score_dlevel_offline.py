@@ -23,7 +23,9 @@ GT = {
     "P1-EXT-B": {"victim_rank": 7, "grid": "P1-EXT", "kind": "hbm"},
     "P3-EXT-A": {"victim_rank": 7, "grid": "P3-EXT", "kind": "stress_cpu"},
     "P3-EXT-B": {"victim_rank": 7, "grid": "P3-EXT", "kind": "stress_io"},
+    "P3-EXT-C": {"victim_rank": 7, "grid": "P3-EXT", "kind": "stress_vm"},
     "P3-SW-A": {"victim_rank": 7, "grid": "P3-SW", "kind": "inline_8a"},
+    "P3-SW-B": {"victim_rank": 7, "grid": "P3-SW", "kind": "sidecar_8b"},
 }
 
 
@@ -166,7 +168,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
     # P3-EXT stress_cpu/io：注入打整机 host，不绑死 local_rank=7；同 node（每节点 8 卡）即命中
     nproc_guess = 8
     same_node = (suspect // nproc_guess) == (victim // nproc_guess)
-    host_wide = case.startswith("P3-EXT") and gt.get("kind") in ("stress_cpu", "stress_io")
+    host_wide = case.startswith("P3-EXT") and gt.get("kind") in ("stress_cpu", "stress_io", "stress_vm")
     if abs(suspect - victim) <= 1 or (host_wide and same_node):
         d_level = 3
         d_final_step = d1_step

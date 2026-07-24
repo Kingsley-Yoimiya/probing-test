@@ -47,12 +47,19 @@ def _host_psi_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str
         if case == "P3-EXT-B":
             rate = blob.get("io_some_rate_us_s")
             return True, f"host_psi_io:rate={rate}"
+        if case == "P3-EXT-C":
+            rate = blob.get("memory_some_rate_us_s")
+            return True, f"host_psi_memory:rate={rate}"
         rate = blob.get("cpu_some_rate_us_s")
         return True, f"host_psi_cpu:rate={rate}"
     if case == "P3-EXT-B":
         rate = blob.get("io_some_rate_us_s")
         thr = blob.get("threshold_io_rate_us_s")
         return False, f"SQL_NO_EXT_EVIDENCE:host_psi_io_no_hit:rate={rate}:thresh={thr}"
+    if case == "P3-EXT-C":
+        rate = blob.get("memory_some_rate_us_s")
+        thr = blob.get("threshold_mem_rate_us_s") or blob.get("threshold_rate_us_s")
+        return False, f"SQL_NO_EXT_EVIDENCE:host_psi_memory_no_hit:rate={rate}:thresh={thr}"
     rate = blob.get("cpu_some_rate_us_s")
     thr = blob.get("threshold_cpu_rate_us_s")
     return False, f"SQL_NO_EXT_EVIDENCE:host_psi_no_hit:rate={rate}:thresh={thr}"

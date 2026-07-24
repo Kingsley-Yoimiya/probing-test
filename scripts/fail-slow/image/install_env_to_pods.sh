@@ -75,7 +75,7 @@ export PROBING_GPU_SAMPLE_MS=1000
 unset PROBING_TORCH_PROFILING
 export SIDECAR_WARMUP=8
 EOT
-/opt/conda/bin/python3.12 -c "import probing; print('probing_import_ok', probing.__file__)"
+/opt/conda/bin/python3.12 -c 'import probing; print(\"probing_import_ok\", probing.__file__)'
 echo INSTALL_OK $pod
 "
 done

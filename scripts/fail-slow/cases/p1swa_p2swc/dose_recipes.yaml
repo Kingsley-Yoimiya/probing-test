@@ -1,0 +1,39 @@
+# P1-SW-A / P2-SW-C 隔离剂量（不写入共享 dose_recipes.yaml）
+defaults:
+  sidecar_local_rank: 7
+  inject_measure_window: [100, 300]
+
+cases:
+  P1-SW-A:
+    inject_kind: "2a"
+    mode: gpu_bound
+    loud:
+      args: "chunks=12,stall_mb=768,stall_s=0.25"
+      accept_min_ratio: 1.3
+      env: { INLINE_2A_CHUNKS: "12", INLINE_2A_STALL_MB: "768", INLINE_2A_STALL_S: "0.25" }
+      note: "冻结：barrier 前碎片+大块+最小 stall；pilot3/formal16 C1/C0≈3.53"
+    quiet:
+      args: "chunks=3,stall_mb=128,stall_s=0.05"
+      accept_min_ratio: 1.15
+      env: { INLINE_2A_CHUNKS: "3", INLINE_2A_STALL_MB: "128", INLINE_2A_STALL_S: "0.05" }
+    masked:
+      args: "chunks=1,stall_mb=64,stall_s=0.02"
+      accept_min_ratio: 1.05
+      env: { INLINE_2A_CHUNKS: "1", INLINE_2A_STALL_MB: "64", INLINE_2A_STALL_S: "0.02" }
+
+  P2-SW-C:
+    inject_kind: "5c"
+    mode: gpu_bound
+    loud:
+      args: "hca_rev=1,topo_extra_ar=16"
+      accept_min_ratio: 1.15
+      env: { TOPO_EXTRA_AR: "16" }
+      note: "HCA 逆序 + TOPO_EXTRA_AR；禁止默认 P2P_DISABLE（64卡 hang）；集群中断前未标定成功"
+    quiet:
+      args: "hca_rev=1,topo_extra_ar=4"
+      accept_min_ratio: 1.1
+      env: { TOPO_EXTRA_AR: "4" }
+    masked:
+      args: "hca_rev=1,topo_extra_ar=1"
+      accept_min_ratio: 1.05
+      env: { TOPO_EXTRA_AR: "1" }

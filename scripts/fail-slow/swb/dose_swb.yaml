@@ -1,0 +1,72 @@
+# Fail-slow SW-B 剂量配方（MetaX C550 / MCCL）
+# 编排：run_case_swb.sh + INJECT_ARGS；验收：父目录 accept_loud.py
+# 证据锚点：lab-workspace reports/rounds/muxi_fabric_w3_* Ring/Simple+ch=4 → 81.8→38.2 GB/s
+
+defaults:
+  nnodes: 8
+  nproc: 8
+  sidecar_local_rank: 7          # victim = node0 local_rank 7
+  inject_measure_window: [100, 300]
+  mode: gpu_bound
+  model: gpt2
+  seq_base: 1024
+  local_code: /workspace/probe-bundle/swb
+  pod_prefix_hint: yjr-swb
+
+cases:
+  P2-SW-B:
+    inject_kind: mccl_algo
+    note: >
+      强制 MCCL 算法/协议 + 通道钳制；无 sidecar。
+      C0 不设 MCCL_MIN/MAX_NCHANNELS；C1+ 设 denv。
+      Loud 对齐 fabric 带宽悬崖（Ring/Simple + channels=4）。
+    loud:
+      args: "algo=Ring,proto=Simple,min_ch=4,max_ch=4"
+      accept_min_ratio: 1.15
+      expected: "comm_ms / AllReduce 带宽跌落；fabric 参考 81.8→38.2 GB/s"
+    quiet:
+      args: "algo=Ring,proto=Simple,min_ch=8,max_ch=8"
+      accept_min_ratio: 1.15
+      expected: "通道 8：带宽介于默认与 ch=4 之间（fabric ~57.8 GB/s）"
+    masked:
+      args: "algo=Ring,proto=Simple,min_ch=16,max_ch=16"
+      accept_min_ratio: 1.05
+      expected: "通道放宽，慢化变弱，易被 step_ms 噪声淹没"
+
+  P1-SW-B:
+    inject_kind: rare_shape   # alias: 2b → INLINE_INJECT=2b
+    note: >
+      OUTLINE 2B rare-shape 重编译：victim 在注入窗内 pad/truncate 到罕见 seq；
+      jsonl 记 shape_seq；非 victim / 窗外保持 --seq。
+    loud:
+      args: "rare_seq=1536,every=1"
+      accept_min_ratio: 1.15
+      expected: "窗内每步 rare seq → compute_ms 双峰 / shape_seq 跳变"
+    quiet:
+      args: "rare_seq=1280,every=4"
+      accept_min_ratio: 1.15
+      expected: "每 4 步一次，双峰更稀"
+    masked:
+      args: "rare_seq=1152,every=8"
+      accept_min_ratio: 1.05
+      expected: "接近 base 1024，易漏检"
+
+env_map:
+  P2-SW-B:
+    MCCL_ALGO: from args.algo
+    MCCL_PROTO: from args.proto
+    MCCL_MIN_NCHANNELS: from args.min_ch
+    MCCL_MAX_NCHANNELS: from args.max_ch
+  P1-SW-B:
+    INLINE_INJECT: "2b"
+    INLINE_INJECT_START: 100
+    INLINE_INJECT_STOP: 300
+    INLINE_VICTIM_LOCAL_RANK: 7
+    RARE_SHAPE_SEQ: from args.rare_seq
+    RARE_SHAPE_EVERY: from args.every
+    RARE_SHAPE_FRAC: optional
+
+scoring:
+  P2: score_comm_phase.py   # detect + score on comm_ms
+  P1: score_shape_bimodal.py
+  accept: ../accept_loud.py

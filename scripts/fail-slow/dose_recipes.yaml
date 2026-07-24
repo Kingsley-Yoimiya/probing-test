@@ -47,5 +47,6 @@ scoring:
   loud_pass3_d_level: 3          # P1-EXT-A/B、P3-EXT-A @ loud2
   d4_requires: probing_sql
   probing_pkg: "Probing_plus 0.2.5 (gpu+mx-smi); not PyPI 0.2.4"
-  image_recipe: scripts/probing-failslow/image/
-  competitors: { Greyhound: ENV-BLOCKED, XPUTimer: ENV-BLOCKED }
+  image_recipe: scripts/fail-slow/image/
+  # 对手状态见 ledger.md §3.2；禁止在此写 ENV-BLOCKED（红线 5）
+  competitors: { Greyhound: PENDING, XPUTimer: PENDING }

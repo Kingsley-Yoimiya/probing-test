@@ -2,7 +2,7 @@
 # Docker 等价：docker run --shm-size=32g …
 # containerd/k8s 标准做法：emptyDir medium=Memory 挂到 /dev/shm
 #
-# 已在跑的 privileged pod 可不用重建：scripts/probing-failslow/ensure_shm.sh
+# 已在跑的 privileged pod 可不用重建：scripts/fail-slow/ensure_shm.sh
 apiVersion: v1
 kind: Pod
 metadata:

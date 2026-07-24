@@ -11,8 +11,8 @@
 |---|---|---|---|
 | A1 | Workload 规格 | **GPT-2 124M / 500 步 / seq1024 / DDP**（SOP 写的）。TinyGPT 仅作 pilot 快速验证管线,论文数字用 GPT-2。 | SOP §2.1 已写死 |
 | A2 | 本轮 case 白名单 | 第一梯队(3A/3B/9A/9B/8A)先跑;❌ 的(4A-4C)跳过不进分母;◐ 的视权限推进 | case 文档各自标注 |
-| A3 | 规模阶梯 | 默认 8 卡(单节点);Eval-D 扫 8/32/128/512;超 512 卡视资源 | SOP §5.2.4 A-sys |
-| A4 | 平行 run 集合 | 最低: A/B/C(Probing);对手视环境:能跑就加 D/E,ENV-BLOCKED 标 N/A | SOP §5.1.1 |
+| A3 | 规模阶梯 | **现状默认 2×8=16 rank**（ledger）；Eval-D 另扫 8/32/128/512 | `ledger.md` |
+| A4 | 平行 run 集合 | 最低 C0/C1/C2（Probing）；对手 PENDING，穷尽后才 N/A | `rules.md` / `ledger.md` |
 | A5 | 判分主证据 | **Probing SQL 表为主**;训练内 compute_ms/wait_ms 仅作离线验证,不作检测证据。**P3-EXT 附注(2026-07-24)**：`cpu.tasks` 实测仅本进程线程、见不到 host `stress-ng`；允许 `dump_probing_sql.sh` 同窗采集的 `/proc/pressure`（`host_pressure.json`，证据名 `host_psi_cpu`）升 D4。**P1-EXT 附注(2026-07-24)**：MetaX 上 CudaBackend 起不来 → `gpu.utilization`/`process.gpu_users` 长期 missing；允许同窗 `mx-smi`（`host_gpu.json`：`host_mx_smi_hbm_bw` / `host_mx_smi_gpu_util`）升 D4。**禁止**仅用 `injection.log` / 裸 `pgrep` | SOP §2.4 + `score_dlevel_sql.py` |
 
 ---
@@ -22,14 +22,14 @@
 | # | 问题 | 决策 | 落到哪 |
 |---|---|---|---|
 | B1 | case 文档 | **2026-07-24 删除 `cases/`**：预写 SQL 违反红线 2 / 三阶段；定义→OUTLINE，配方→`dose_recipes.yaml`，检测→探索冻结进 `scripts/fail-slow/`，结果→`ledger.md` | README / ledger 维护纪律 |
-| B2 | 注入脚本路径 | 统一为 `scripts/fail-slow/` + `INJECT_KIND` 分支;case 文档 §1.2 写具体 kind | case 文档各自 |
-| B3 | SQL 表/字段确认 | **2026-07-23 复测（Probing_plus 0.2.5 wheel）**: `cpu.utilization`✅ / `gpu.devices`✅(可空) / `python.torch_trace`✅(需 `PROBING_TORCH_PROFILING=on`) / `python.comm_collective`✅；`gpu.utilization`⚠ 采样未自动起表（`SET probing.gpu.sample_interval` 亦失败，待查 backend）；`process.gpu_users`❌ 主线无表。PyPI `0.2.4` **无** gpu/cpu 扩展，勿用。统一环境见 `scripts/fail-slow/image/` | case 文档 §2 + image/README |
-| B4 | P1-HW 频率注入 | **"启动即带档"协议**:训练启动前设好降频,整 run 带档(不中途改);恢复档 `xcore=9,mc=3` | P1-HW-A 文档 |
-| B5 | P2-HW tc/netem | **标 ❌ 跳过**(RoCE 绕过 tc);检测方案照写(证明"检测就绪") | P2-HW 文档 |
-| B6 | P3 host 咬不动 | SOP 已规定 num_workers=2 + prefetch_factor=2;Loud 档若仍无效标 `injection_ineffective` | case 文档 §1 + SOP §7.1 |
-| B7 | P1-SW / P2-SW 占位 | 本轮实现;若无法实现标 ◐ 但仍写检测方案 | case 文档 |
-| B8 | 间歇/渐进时序 | case 文档 §1.4 各自写特殊时序(on-off 周期 / 线性递增) | case 文档 |
-| B9 | 多节点 ground-truth | SOP §2.4 已加:rank0 写 `/dev/shm/training_step`,注入器 watch;多节点用 AFS 原子文件 | SOP §2.4 |
+| B2 | 注入脚本路径 | 统一为 `scripts/fail-slow/` + `INJECT_KIND`；kind 见 `dose_recipes.yaml` / `run_case_abc.sh` | 脚本 |
+| B3 | SQL 表/字段确认 | **2026-07-23 复测（Probing_plus 0.2.5）**：见 `ledger.md` §3.4；PyPI 0.2.4 勿用 | `ledger.md` + `image/` |
+| B4 | P1-HW 频率注入 | **"启动即带档"**：训练前设好降频，整 run 带档；恢复档 `xcore=9,mc=3` | OUTLINE / 探索冻结 |
+| B5 | P2-HW tc/netem | **标 ❌ 跳过**（RoCE 绕过 tc） | OUTLINE |
+| B6 | P3 host 咬不动 | `num_workers=2` + `prefetch_factor=2` + `host_bound`；仍无效 → `injection_ineffective` | `ledger.md` / `rules.md` |
+| B7 | P1-SW / P2-SW 占位 | 探索阶段实现或标跳过不进分母 | OUTLINE + ledger |
+| B8 | 间歇/渐进时序 | OUTLINE / dose 注释写 on-off / 线性递增 | OUTLINE |
+| B9 | 多节点 ground-truth | rank0 写 step counter；AFS 不可靠时用 pod 本地+回拉（见 layout） | `layout.md` |
 
 ---
 
@@ -37,12 +37,12 @@
 
 | # | 问题 | 决策 | 落到哪 |
 |---|---|---|---|
-| C1 | 冻结流程 | 仅 Loud pilot 调参→文档化→Quiet/Masked 不改;对手同等机会(健康集+Loud pilot 调阈值) | SOP §5.2.1 |
-| C2 | cross_rank_compare.py | 本轮方案:对每个 rank 分别查→外部 Python 汇总;SOP §3.8 已给模式 | SOP §3.8 |
-| C3 | Greyhound/XPUTimer MetaX | **待接入**（非最终 ENV-BLOCKED）。有依赖坑（Greyhound: NCCL/Redis/Docker；XPUTimer: NCCL≤2.21.5/Bazel），但按红线 5 **先趟通再结论**；穷尽后才记 N/A，且**不**在编排脚本硬编码 blocked | `ledger.md` §3.2 |
-| C4 | 离线对手 trace 转换 | 一律用 B run 导出;转换脚本待写(schema 见 BASELINE-SETUP-PLAYBOOK) | case 文档 §3 + 工程 TODO |
-| C5 | D2/D3/D3.5 统计口径 | SOP §4.2 已定:IoU≥0.5=D2;D3 ±1 rank 容差;D3.5(位置对来源错)统计时算 D3 | SOP §4.2 |
-| C6 | FPR≤2% + ROC | SOP §4.2 已改:≤2% 可接受;和检测率一起报 | SOP §4.2 |
+| C1 | 冻结流程 | Loud pilot 调参→冻结进 scripts→Quiet/Masked 不改；对手同等机会 | `rules.md` |
+| C2 | 跨 rank 汇总 | 对各 rank 分别查→外部汇总（`global.*` 待实测） | `ledger.md` §3.4 |
+| C3 | Greyhound/XPUTimer MetaX | **PENDING / 待接入**（非 ENV-BLOCKED）；穷尽后才 N/A | `ledger.md` §3.2 |
+| C4 | 离线对手 trace 转换 | 一律用 B/C1-run 导出；转换脚本待写 | 工程 TODO |
+| C5 | D2/D3 口径 | IoU≥0.5=D2；**以 `rules.md` D3 为准**（P1/P2=rank，P3=host）；勿用已删 SOP 的 ±1/D3.5 | `rules.md` |
+| C6 | FPR≤2% + ROC | ≤2% 可接受；和检测率一起报 | `rules.md` |
 
 ---
 
@@ -50,11 +50,11 @@
 
 | # | 问题 | 决策 | 落到哪 |
 |---|---|---|---|
-| D1 | AFS 不可靠 | 默认 pod 本地落盘 + 每 case 完立即回拉 `results/`;不强制 AFS | SOP §6.1 + AGENTS.md |
-| D2 | provision 脚本 | 按 layout 用 `deploy_local`;SOP 不改,工程侧对齐 | 工程侧 |
-| D3 | PVC/secret | 按实际环境决定;SOP 不做硬性规定 | 工程侧 |
-| D4 | 结果目录 schema | SOP §6.1 已定 | SOP §6.1 |
-| D5 | 数据卫生 | case 间: clean_group(停注入器、恢复频率);防污染 checklist 在 SOP §5.4 前置检查 | SOP §5.4 |
+| D1 | AFS 不可靠 | 默认 pod 本地落盘 + 立即回拉 `results/`；不强制 AFS | `layout.md` / `ledger.md` |
+| D2 | provision 脚本 | 按 layout 本地落盘；工程侧对齐 | `layout.md` |
+| D3 | PVC/secret | 按实际环境；不进方法论 | 工程侧 |
+| D4 | 结果目录 schema | 见 `layout.md` / ledger §1.5 | `layout.md` |
+| D5 | 数据卫生 | case 间 clean；发射前查外来 torchrun（ledger 门禁 #9） | `ledger.md` |
 
 ---
 

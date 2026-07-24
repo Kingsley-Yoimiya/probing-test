@@ -23,7 +23,7 @@ KC="${KUBECONFIG:?need KUBECONFIG (yinjinrun.p, 经 muxi-h3c.env)}"
 NS="${NS:-default}"
 # 默认仍是 maca 底包；统一实验镜像构建后覆盖：
 #   IMAGE=registry2.d.pjlab.org.cn/ccr-ailabdev/probing-failslow-metax:<tag>
-#   见 scripts/probing-failslow/image/README.md
+#   见 scripts/fail-slow/image/README.md
 IMAGE="${IMAGE:-registry2.d.pjlab.org.cn/ccr-deeplink/megatron-lm:0.12.0-maca.ai3.3.0.11-torch2.6-py312-ubuntu22.04-amd64-driver}"
 # mohe 默认 secret；若环境实际名称为 muxi-mohe，可直接 PULL_SECRET=muxi-mohe 覆盖。
 PULL_SECRET="${PULL_SECRET:-megatronmuxi-test}"

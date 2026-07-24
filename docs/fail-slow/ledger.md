@@ -6,7 +6,7 @@
 >
 > **别人来问，翻这里**：模型是什么（→ §2.1）、某功能开没开（→ §2.1 / §1.2）、base 怎么配（→ §1）、我们开了什么参数（→ §2.1）、跑了哪些 case 结果如何（→ §3）。
 >
-> **真值以脚本为准**：下面的值来自 `scripts/fail-slow/` 的实际脚本与 `image/` 配方，不是从别处抄的。脚本改了，这里跟着改；发现和 [`sop.md`](sop.md) 不一致，**以脚本+本台账为准**并在此标注。
+> **真值以脚本为准**：下面的值来自 `scripts/fail-slow/` 的实际脚本与 `image/` 配方，不是从别处抄的。脚本改了，这里跟着改。方法论冲突时以 [`rules.md`](rules.md) 为准。
 
 ---
 
@@ -74,7 +74,7 @@
 
 ## 1.4 平台 know-how（探索 verdad；勿把答案写进检测 SQL）
 
-> 剂量数值仍以 `dose_recipes.yaml` / 脚本为准。这里只记「不读 runbook 就会假阴性」的平台事实。
+> 剂量数值仍以 `dose_recipes.yaml` / 脚本为准。这里只记「不读本台账就会假阴性」的平台事实。
 
 | 场景 | 要点 |
 |---|---|
@@ -108,7 +108,7 @@
 | 模型 | **GPT-2 124M**（hidden=768, layers=12, ffn=3072, vocab=50257, 词表/输出层权重共享） | `--model gpt2`；`tiny` 仅紧急管线回退 |
 | batch (per GPU) | **8** | `--batch` |
 | sequence length | **1024** | `--seq` |
-| **dtype** | **bfloat16** | 脚本 `model.to(dtype=torch.bfloat16)`。**⚠️ 注意：`sop.md` §2.1 写的是 fp16，与脚本不符，以脚本 bf16 为准** |
+| **dtype** | **bfloat16** | 脚本 `model.to(dtype=torch.bfloat16)` |
 | seed | **42** | `--seed`；正式扫 42/43/44 |
 | 并行 | DDP（小规模）/ FSDP（≥64 卡） | — |
 | optimizer | AdamW | — |
@@ -148,7 +148,7 @@
 | N_inject | **150**（= warmup 50 + 窗起 100） | 保证 100 步干净基线 |
 | 注入持续 | **200 步**（窗 [100,300] 内部计，即全局 step 150–350） | `dose_recipes.yaml` `inject_measure_window: [100,300]` |
 | victim | `sidecar_local_rank=7` | 训练 local_rank=7 同卡 |
-| 特殊时序 | 间歇类 on-off 交替 / 渐进类线性递增 | 各 case 文档 §1.4 |
+| 特殊时序 | 间歇类 on-off 交替 / 渐进类线性递增 | 见 OUTLINE / `dose_recipes.yaml` 注释 |
 
 ---
 
@@ -218,7 +218,7 @@
 | `python.comm_collective` | ✅ |
 | `gpu.utilization` | ⚠️ 采样未自动起表（`SET probing.gpu.sample_interval` 亦失败，待查 backend） |
 | `process.gpu_users` | ❌ 主线无表 |
-| 跨 rank 联邦查询 | ⚠️ **探索阶段实测确认**：`sop.md` §3.8 称“无内置联邦”，兼容性评审称现已支持 `global.*`——不预设结论，按 `rules.md` 红线 5 去趟通：真跑一次确认当前 wheel 支持到什么程度，结果回填此处 |
+| 跨 rank 联邦查询 | ⚠️ 待探索实测：是否支持 `global.*`；当前管线可对各 rank 分别查再外部汇总 |
 
 ---
 
@@ -227,10 +227,8 @@
 | 内容 | 落点 |
 |---|---|
 | 方法论（红线/控变/三阶段） | [`rules.md`](rules.md) |
-| 完整长规程 | [`sop.md`](sop.md) |
 | case 故障定义 | `OUTLINE`（论文侧 27-case 真相源） |
-| 注入配方 | `scripts/fail-slow/dose_recipes.yaml` |
-| 检测方案 | 探索阶段发现→冻结进 `scripts/fail-slow/`（不预写） |
-| 剂量配方真相源 | `scripts/fail-slow/dose_recipes.yaml` |
+| 注入配方 / 检测脚本 | `scripts/fail-slow/`（含 `dose_recipes.yaml`） |
 | 历史拍板决策 | [`decisions.md`](decisions.md) |
-| P3-EXT-A 首个 D4 实录 | [`p3-d4-first-case-runbook.md`](p3-d4-first-case-runbook.md) |
+| 落盘路径 | [`layout.md`](layout.md) |
+| 冻结战役 raw | `reports/fail-slow-mohe/20260724-first-tier-loud-d4/` |

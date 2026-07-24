@@ -1,7 +1,7 @@
 # Fail-Slow 编排脚本（真相源）
 
 > **自 2026-07-24 起**：本目录为 Fail-Slow 可执行脚本的**唯一维护点**。  
-> 旧路径 `lab-workspace/scripts/probing-failslow/` 仅保留兼容副本 + stub，**后续改这里**。
+> 旧路径 `lab-workspace/scripts/probing-failslow/` 兼容副本已于 2026-07-24 删除。
 
 ## 常用入口
 

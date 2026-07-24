@@ -99,12 +99,8 @@ run_config() {
 }
 
 pull_results() {
-  echo "ENV-BLOCKED: Greyhound (NCCL/Redis/Docker dependency); XPUTimer (NCCL<=2.21.5/Bazel dependency)"
+  # 对手工具状态只写在 ledger.md §3.2；此处禁止硬编码 ENV-BLOCKED（rules 红线 5）
   IFS=',' read -r -a POD_ARRAY <<< "$PODS"
-  for pod in "${POD_ARRAY[@]}"; do
-    kubectl --kubeconfig="$KUBECONFIG" -n "$NS" exec "$pod" -- bash -c \
-      "mkdir -p '$LOCAL_OUT/$CASE'; printf '%s\n' 'Greyhound: ENV-BLOCKED' 'XPUTimer: ENV-BLOCKED' > '$LOCAL_OUT/$CASE/env_blocked_tools.txt'"
-  done
   DEST="$LOCAL_RESULT_ROOT/$CASE"
   mkdir -p "$DEST/by_pod"
   for pod in "${POD_ARRAY[@]}"; do

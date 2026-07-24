@@ -8,21 +8,24 @@
 
 | 文件 | 用途 |
 |------|------|
-| [`sop.md`](sop.md) | 标准实验流程（Pilot → 固化 → 正式） |
+| [`rules.md`](rules.md) | **实验规则**（红线 + 控变原则 + 三阶段）——核心方法论，先读 |
+| [`ledger.md`](ledger.md) | **实验台账**（环境门禁 + 控制变量 + 已跑 case 速览）——现状 |
+| [`sop.md`](sop.md) | 完整长规程（`rules.md` 的展开版） |
 | [`decisions.md`](decisions.md) | 已拍板决策（含 A5 D4 证据） |
 | [`layout.md`](layout.md) | 落盘 / 路径约定 |
-| [`open-questions.md`](open-questions.md) | 待决问题 |
+| [`open-questions.md`](open-questions.md) | 旧待决清单（**已关闭**，见 `decisions.md`） |
 | [`p3-d4-first-case-runbook.md`](p3-d4-first-case-runbook.md) | **P3-EXT-A 首个 D4 跑通实录**（转发首选） |
 | [`d4-live-sql-watch.md`](d4-live-sql-watch.md) | D4 SQL 盯梢笔记 |
 | [`sql-d4-night-workflow.md`](sql-d4-night-workflow.md) | SQL-D4 夜间战役流程 |
 | [`profiling-deep-dive.md`](profiling-deep-dive.md) | Probing 机制深挖 |
-| [`cases/`](cases/) | 27 格 case 文档 + `TEMPLATE.md` |
+
+> **无 `cases/` 目录**（2026-07-24 删除）：case 故障定义走 `OUTLINE`，注入配方走 `scripts/fail-slow/dose_recipes.yaml`，检测方案在探索阶段发现并冻结进脚本——不再预写 case 文档（原因见 `ledger.md` 维护纪律）。
 
 ## 与 myportal 的分工
 
 | 内容 | 落点 |
 |------|------|
-| 实验文档 / case / SOP | **本仓** `docs/fail-slow/` |
+| 实验规则 / 台账 / SOP | **本仓** `docs/fail-slow/` |
 | 编排 / 注入 / 判分脚本 | **本仓** `scripts/fail-slow/` |
 | 身份 / kube / vault / 通道 | myportal `config/`（不迁） |
 | 大体积 jsonl 结果备份 | myportal `results/<node>/<run_id>/`；**冻结战役完整 raw** 亦在本仓见下 |

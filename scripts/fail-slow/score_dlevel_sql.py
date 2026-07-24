@@ -267,7 +267,7 @@ def main() -> None:
         )
     md.append("")
     md.append("- 主证据：C2 `probing/query_manifest.json`；训练 jsonl 仅离线验证到 D3。")
-    md.append("- Greyhound / XPUTimer = ENV-BLOCKED（不记 D0）。")
+    md.append("- Greyhound / XPUTimer = PENDING（见 ledger §3.2；未接入≠D0，也未定谳 ENV-BLOCKED）。")
     md.append(f"- CSV: `{csv_path}`")
     (root / f"VERDICT_SQL_{args.dose}.md").write_text("\n".join(md) + "\n")
     print("\n".join(md))

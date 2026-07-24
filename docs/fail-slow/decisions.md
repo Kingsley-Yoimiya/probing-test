@@ -21,7 +21,7 @@
 
 | # | 问题 | 决策 | 落到哪 |
 |---|---|---|---|
-| B1 | 26 case 无文档 | **并行生成中**(3 个 sub agent 各负责 P1/P2/P3) | `docs/fail-slow/cases/` |
+| B1 | case 文档 | **2026-07-24 删除 `cases/`**：预写 SQL 违反红线 2 / 三阶段；定义→OUTLINE，配方→`dose_recipes.yaml`，检测→探索冻结进 `scripts/fail-slow/`，结果→`ledger.md` | README / ledger 维护纪律 |
 | B2 | 注入脚本路径 | 统一为 `scripts/fail-slow/` + `INJECT_KIND` 分支;case 文档 §1.2 写具体 kind | case 文档各自 |
 | B3 | SQL 表/字段确认 | **2026-07-23 复测（Probing_plus 0.2.5 wheel）**: `cpu.utilization`✅ / `gpu.devices`✅(可空) / `python.torch_trace`✅(需 `PROBING_TORCH_PROFILING=on`) / `python.comm_collective`✅；`gpu.utilization`⚠ 采样未自动起表（`SET probing.gpu.sample_interval` 亦失败，待查 backend）；`process.gpu_users`❌ 主线无表。PyPI `0.2.4` **无** gpu/cpu 扩展，勿用。统一环境见 `scripts/fail-slow/image/` | case 文档 §2 + image/README |
 | B4 | P1-HW 频率注入 | **"启动即带档"协议**:训练启动前设好降频,整 run 带档(不中途改);恢复档 `xcore=9,mc=3` | P1-HW-A 文档 |
@@ -39,7 +39,7 @@
 |---|---|---|---|
 | C1 | 冻结流程 | 仅 Loud pilot 调参→文档化→Quiet/Masked 不改;对手同等机会(健康集+Loud pilot 调阈值) | SOP §5.2.1 |
 | C2 | cross_rank_compare.py | 本轮方案:对每个 rank 分别查→外部 Python 汇总;SOP §3.8 已给模式 | SOP §3.8 |
-| C3 | Greyhound/XPUTimer MetaX | Greyhound: ENV-BLOCKED(NCCL/Redis/Docker 依赖,MetaX 环境不兼容);XPUTimer: ENV-BLOCKED(NCCL≤2.21.5,Bazel);记 N/A 不记 D0 | case 文档 §3 |
+| C3 | Greyhound/XPUTimer MetaX | **待接入**（非最终 ENV-BLOCKED）。有依赖坑（Greyhound: NCCL/Redis/Docker；XPUTimer: NCCL≤2.21.5/Bazel），但按红线 5 **先趟通再结论**；穷尽后才记 N/A，且**不**在编排脚本硬编码 blocked | `ledger.md` §3.2 |
 | C4 | 离线对手 trace 转换 | 一律用 B run 导出;转换脚本待写(schema 见 BASELINE-SETUP-PLAYBOOK) | case 文档 §3 + 工程 TODO |
 | C5 | D2/D3/D3.5 统计口径 | SOP §4.2 已定:IoU≥0.5=D2;D3 ±1 rank 容差;D3.5(位置对来源错)统计时算 D3 | SOP §4.2 |
 | C6 | FPR≤2% + ROC | SOP §4.2 已改:≤2% 可接受;和检测率一起报 | SOP §4.2 |

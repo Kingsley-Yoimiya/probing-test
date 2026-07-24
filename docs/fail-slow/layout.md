@@ -23,7 +23,7 @@
 | 离线判分 | `…/score_dlevel_offline.py` |
 | Loud2 / Quiet 战役 | `…/campaign_loud2.sh` / `campaign_quiet_pass3.sh` |
 
-Case 计划文档：`docs/fail-slow/cases/`（27 case 文档已补齐；配方以 `dose_recipes.yaml` 为准）。
+Case 定义 / 配方 / 检测：`OUTLINE` + `dose_recipes.yaml` + 探索冻结进 `scripts/fail-slow/`（**无** `cases/` 预写文档，见 ledger 维护纪律）。
 
 ---
 

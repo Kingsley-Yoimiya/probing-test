@@ -4,7 +4,7 @@
 证据链说明（对齐 decisions A5）：
   - 本脚本 = 离线验证 / 训练内埋点检测程序
   - Probing SQL 主证据若缺失，D4 最高记为 D3 + notes=SQL_PENDING
-  - Greyhound/XPUTimer = ENV-BLOCKED → 不写 D0，写 N/A
+  - Greyhound/XPUTimer = PENDING（ledger §3.2 待接入；禁止写成 ENV-BLOCKED）
 
 用法:
   python3 score_dlevel_offline.py --result-root results/muxi-mohe/<run_id> \\
@@ -215,8 +215,8 @@ def _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_r
         "loc_config": cfg_loc,
         "notes": "; ".join(notes),
         "tool_probing_sql": "SQL_PENDING",
-        "tool_greyhound": "ENV-BLOCKED",
-        "tool_xputimer": "ENV-BLOCKED",
+        "tool_greyhound": "PENDING",
+        "tool_xputimer": "PENDING",
     }
 
 
@@ -267,7 +267,7 @@ def main() -> None:
         )
     md.append("")
     md.append("- 工具=`offline_training_metrics`（训练内 compute/wait/data）；Probing SQL = SQL_PENDING")
-    md.append("- Greyhound / XPUTimer = ENV-BLOCKED（不记 D0）")
+    md.append("- Greyhound / XPUTimer = PENDING（见 ledger §3.2；未接入≠D0，也未定谳 ENV-BLOCKED）")
     md.append(f"- CSV: `{out_csv}`")
     (root / f"VERDICT_{args.dose}.md").write_text("\n".join(md) + "\n")
     (root / "VERDICT.md").write_text("\n".join(md) + "\n")

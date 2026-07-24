@@ -73,12 +73,12 @@
 |---|---|
 | `results/muxi-h3c/20260724_171825-swb64/mccl_calibrate/` | 标定 json + log |
 | `results/muxi-h3c/20260724_171825-swb64-p2-s512/verdict_ratio.json` | 冻结 verdict |
-| `…-p2-s512/P2-SW-B/round_1/{C0,C1,C2}/ranks/` | jsonl（C1 缺 8 个 rank=1 节点） |
-| `…-p2-s512/P2-SW-B/round_1/C2_probing/probing/` | Probing dump（~22 项） |
-| `…-p2-s512/straggler/trace-C1.csv` + `meta-C1.yaml` | 离线 Straggler 转换 |
+| `…-p2-s512/P2-SW-B/round_1/{C0,C1,C2}/ranks/` | jsonl：C0=64 / **C1=56**（缺 48–55）/ C2=64 |
+| `…-p2-s512/P2-SW-B/round_1/C2_probing/probing/` | Probing dump（22 项） |
+| `…-p1/P1-SW-B/round_1/C0_baseline/ranks/` | P1 C0=64（中断前已跑完；无 C1/C2） |
 | `…-p2-loud/`、`…-p2-bite2/` | 爬坡半成品 |
 | `…-p1/logs/p1_orch_interrupted.txt` | P1 中断编排日志 |
-| `scripts/fail-slow/swb/` | 隔离代码（见下） |
+| `…-FREEZE.tgz` | 紧凑包：verdict+标定+straggler+P1 C0 |
 
 ## 6. 代码隔离目录（已本地保存 / 待 commit）
 

@@ -50,7 +50,11 @@
 - **step_ratio=1.132**（未达 1.15）；**comm_ratio=1.687**；标定 fabric **2.13**
 - 验收口径：通道路径 Loud 以标定 + `comm_ratio` 为主证；step 因 compute~90ms 主导未咬满 1.15
 - 落点：`results/muxi-h3c/20260724_171825-swb64-p2-s512/verdict_ratio.json`
-- C2：`rc=0`，Probing dump 在 `…/C2_probing/probing/`；本机回拉进行中
+- C2：`rc=0`，Probing dump 在 `…/C2_probing/probing/`（本机 22 项）
+- 本机回拉（2026-07-24 19:51 补扒）：
+  - P2：C0=64 / C1=56（缺 rank 48–55=`yjr-swb-h145216` C1 `node_6.fail`/TCPStore）/ C2=64；Probing 22 项
+  - P1：C0=64（仅健康 baseline，无 C1/C2）
+  - 落点：`results/muxi-h3c/20260724_171825-swb64{,-p2-s512,-p2-loud,-p2-bite2,-p1}/` + `…-FREEZE.tgz`
 - 禁止旁证抬分
 
 ## 隔离（多 Agent）— 硬约定

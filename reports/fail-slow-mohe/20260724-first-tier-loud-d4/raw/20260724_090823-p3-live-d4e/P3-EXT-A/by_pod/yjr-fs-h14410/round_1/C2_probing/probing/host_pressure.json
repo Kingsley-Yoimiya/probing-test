@@ -1,0 +1,112 @@
+{
+  "dt_s": 2.0,
+  "cpu_some_rate_us_s": 944654.5,
+  "io_some_rate_us_s": 1.5,
+  "memory_some_rate_us_s": 0.0,
+  "cpu_some_avg10_t1": 33.55,
+  "threshold_cpu_rate_us_s": 200000.0,
+  "hit": true,
+  "evidence": "host_psi_cpu",
+  "t0": {
+    "cpu": {
+      "some": {
+        "raw": "some avg10=21.95 avg60=8.01 avg300=10.38 total=58968038559",
+        "avg10": 21.95,
+        "avg60": 8.01,
+        "avg300": 10.38,
+        "total": 58968038559
+      },
+      "full": {
+        "raw": "full avg10=12.51 avg60=5.41 avg300=7.90 total=28832364053",
+        "avg10": 12.51,
+        "avg60": 5.41,
+        "avg300": 7.9,
+        "total": 28832364053
+      }
+    },
+    "memory": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=81964",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81964
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=81456",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81456
+      }
+    },
+    "io": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=17900091",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 17900091
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=12222874",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 12222874
+      }
+    },
+    "loadavg": "35.71 34.33 36.74 262/4816 72335"
+  },
+  "t1": {
+    "cpu": {
+      "some": {
+        "raw": "some avg10=33.55 avg60=10.56 avg300=10.89 total=58969927868",
+        "avg10": 33.55,
+        "avg60": 10.56,
+        "avg300": 10.89,
+        "total": 58969927868
+      },
+      "full": {
+        "raw": "full avg10=19.12 avg60=6.83 avg300=8.18 total=28833441354",
+        "avg10": 19.12,
+        "avg60": 6.83,
+        "avg300": 8.18,
+        "total": 28833441354
+      }
+    },
+    "memory": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=81964",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81964
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=81456",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81456
+      }
+    },
+    "io": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=17900094",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 17900094
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=12222874",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 12222874
+      }
+    },
+    "loadavg": "35.71 34.33 36.74 268/4824 72341"
+  }
+}

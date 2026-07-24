@@ -1,0 +1,2 @@
+SIDECAR_WARMUP kind=inline_hbm
+SIDECAR_START kind=inline_hbm

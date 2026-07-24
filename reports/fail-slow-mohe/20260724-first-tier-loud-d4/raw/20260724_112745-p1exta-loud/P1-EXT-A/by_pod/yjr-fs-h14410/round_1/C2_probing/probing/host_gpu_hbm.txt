@@ -1,0 +1,11 @@
+mx-smi  version: 2.2.9
+
+=================== MetaX System Management Interface Log ===================
+Timestamp                                         : Fri Jul 24 13:29:41 2026
+
+Attached GPUs                                     : 8
+GPU#7  MXC550-PL  0000:e5:00.0
+    Hbm Bandwidth
+        throughput                                : 1200207 MBytes/s
+
+End of Log

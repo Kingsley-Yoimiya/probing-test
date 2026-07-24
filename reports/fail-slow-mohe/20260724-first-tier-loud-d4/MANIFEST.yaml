@@ -1,0 +1,55 @@
+# Frozen snapshot — 2026-07-24 first-tier Loud→D4 (mohe-241)
+campaign_id: 20260724-first-tier-loud-d4
+cluster: mohe-241
+identity: yinjinrun.p
+pods: [yjr-fs-h14410, yjr-fs-h14411]
+world_size: 16
+proxy: { clash: "127.0.0.1:7897", unset_all_proxy: true }
+shm_gib: 32
+
+control:
+  model: gpt2-124m
+  dtype: bfloat16
+  batch: 8
+  seq: 1024
+  seed: 42
+  iters: 500
+  warmup: 50
+  inject_window_measure: [100, 300]
+  victim_local_rank: 7
+  probing_pkg: "Probing_plus 0.2.5"
+
+cases:
+  P3-EXT-A:
+    run_id: 20260724_090823-p3-live-d4e
+    inject: { kind: stress_cpu, args: "cpu_load=90", mode: host_bound }
+    c1_c0: 2.97
+    d_level: D4
+    evidence: host_psi_cpu
+  P3-SW-A:
+    run_id: 20260724_115002-p3swa-loud
+    inject: { kind: inline_8a, stall_s: 0.25, mode: host_bound }
+    c1_c0: 2.17
+    d_level: D4
+    evidence: cpu.utilization_rss
+    bite_run: 20260724_114257-p3swa-bite2
+  P1-EXT-A:
+    run_id: 20260724_112745-p1exta-loud
+    inject: { kind: cube, args: "duty=0.9,size=8192", mode: gpu_bound }
+    c1_c0: 3.78
+    d_level: D4
+    evidence: host_mx_smi_gpu_util
+  P1-EXT-B:
+    run_id: 20260724_124947-p1extb-loud
+    inject: { kind: inline_hbm, mb: 512, copies: 48, mode: gpu_bound }
+    c1_c0: 1.74
+    d_level: D4
+    evidence: host_mx_smi_hbm_bw
+    bite_run: 20260724_124504-p1extb-bite5
+  P3-EXT-B:
+    status: shelved_injection_ineffective
+    evidence_run: 20260724_104828-p3extb-bite5
+
+raw_root: reports/fail-slow-mohe/20260724-first-tier-loud-d4/raw
+myportal_mirror: results/muxi-mohe/
+docs: CAMPAIGN.md

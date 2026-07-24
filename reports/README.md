@@ -5,3 +5,4 @@
 | 报告 | 说明 |
 |------|------|
 | [`npu-dev1-sensitivity-atlas/REPORT.md`](npu-dev1-sensitivity-atlas/REPORT.md) | 公司 npu-dev-1（16×910B2C）多维资源干扰敏感度图谱 |
+| [`fail-slow-mohe/`](fail-slow-mohe/) | mohe Fail-Slow VERDICT 摘要（P3-EXT-A D4 等）；完整 jsonl 见 myportal `results/muxi-mohe/` |

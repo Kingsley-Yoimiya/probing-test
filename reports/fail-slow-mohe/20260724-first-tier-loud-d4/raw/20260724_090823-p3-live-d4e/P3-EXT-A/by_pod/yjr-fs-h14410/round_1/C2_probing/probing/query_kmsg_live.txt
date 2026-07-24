@@ -1,0 +1,8 @@
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/workspace/probe-bundle/pydeps/bin/probing", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspace/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: error: QueryError: Internal - Schema error: No field named ts. Valid fields are process.kmsg.timestamp, process.kmsg.facility, process.kmsg.level, process.kmsg.message, process.kmsg.timestamp, process.kmsg.facility, process.kmsg.level, process.kmsg.message.

@@ -1,0 +1,7 @@
+cpu_some_rate_us_s=944654.5
+io_some_rate_us_s=1.5
+memory_some_rate_us_s=0.0
+cpu_some_avg10_t1=33.55
+threshold=200000.0
+hit=True
+evidence=host_psi_cpu

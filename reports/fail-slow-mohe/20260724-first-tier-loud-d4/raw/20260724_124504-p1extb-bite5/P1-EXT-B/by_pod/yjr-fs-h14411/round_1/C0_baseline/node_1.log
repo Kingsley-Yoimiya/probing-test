@@ -1,0 +1,16 @@
+W0724 12:45:20.980000 201974 site-packages/torch/distributed/run.py:792] 
+W0724 12:45:20.980000 201974 site-packages/torch/distributed/run.py:792] *****************************************
+W0724 12:45:20.980000 201974 site-packages/torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0724 12:45:20.980000 201974 site-packages/torch/distributed/run.py:792] *****************************************
+yjr-fs-h14411:202044:202044 [6] MCCL INFO /root/mxlog/mccl/mccl.202044.2026_07_24_12_45_29.log
+yjr-fs-h14411:202043:202043 [5] MCCL INFO /root/mxlog/mccl/mccl.202043.2026_07_24_12_45_29.log
+yjr-fs-h14411:202045:202045 [7] MCCL INFO /root/mxlog/mccl/mccl.202045.2026_07_24_12_45_29.log
+yjr-fs-h14411:202038:202038 [0] MCCL INFO /root/mxlog/mccl/mccl.202038.2026_07_24_12_45_29.log
+yjr-fs-h14411:202040:202040 [2] MCCL INFO /root/mxlog/mccl/mccl.202040.2026_07_24_12_45_29.log
+yjr-fs-h14411:202039:202039 [1] MCCL INFO /root/mxlog/mccl/mccl.202039.2026_07_24_12_45_29.log
+yjr-fs-h14411:202042:202042 [4] MCCL INFO /root/mxlog/mccl/mccl.202042.2026_07_24_12_45_29.log
+yjr-fs-h14411:202041:202041 [3] MCCL INFO /root/mxlog/mccl/mccl.202041.2026_07_24_12_45_29.log
+
+yjr-fs-h14411:202039:202178 [0] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:40 MCCL WARN socketProgressOpt: Call to recv from 10.120.28.205<60329> failed : Connection reset by peer
+
+yjr-fs-h14411:202041:202177 [32507] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:608 MCCL WARN socketStartConnect: Connect to 10.120.28.205<42923> failed : Software caused connection abort

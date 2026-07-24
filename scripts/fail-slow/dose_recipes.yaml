@@ -1,0 +1,51 @@
+# Fail-slow 剂量配方（mohe-241 / MetaX C550）
+# 编排：run_case_abc.sh + INJECT_ARGS；验收：accept_loud.py
+# 更新：2026-07-23 loud2 实测
+
+defaults:
+  sidecar_warmup_s: 8
+  sidecar_local_rank: 7   # victim = 训练 local_rank 7
+  inject_measure_window: [100, 300]  # warmup=50 → 全局 step 150–350
+  host_bound_matmul: 768   # train_bench_probe.py TokenDataset
+
+cases:
+  P1-EXT-A:
+    inject_kind: cube
+    mode: gpu_bound
+    loud:   { args: "duty=0.9,size=8192", accept_min_ratio: 1.8, measured_c1_c0: 3.80 }
+    quiet:  { args: "duty=0.3,size=4096", accept_min_ratio: 1.15 }
+    masked: { args: "duty=0.15,size=4096", accept_min_ratio: 1.05 }
+
+  P1-EXT-B:
+    inject_kind: hbm
+    mode: gpu_bound
+    # 2026-07-24：外挂 sidecar hbm 三轮咬空（疑 MetaX 进程间带宽隔离）→ 默认 INLINE_HBM
+    loud:   { args: "inline_hbm_mb=512,inline_hbm_copies=48", accept_min_ratio: 1.6, status: bite_ok_inline, note: "bite5 C1/C0=1.597; loud用48留余量" }
+    quiet:  { args: "inline_hbm_mb=128,inline_hbm_copies=3", accept_min_ratio: 1.15 }
+    masked: { args: "inline_hbm_mb=64,inline_hbm_copies=1", accept_min_ratio: 1.05 }
+
+  P3-EXT-A:
+    inject_kind: stress_cpu
+    mode: host_bound
+    loud:   { args: "cpu_load=90", accept_min_ratio: 1.3, measured_c1_c0: 2.94 }
+    quiet:  { args: "cpu_frac=0.5,cpu_load=70", accept_min_ratio: 1.15 }
+    masked: { args: "cpu_n=2,cpu_load=50", accept_min_ratio: 1.05 }
+
+  P3-EXT-B:
+    inject_kind: stress_io
+    mode: host_bound
+    loud:   { args: "", accept_min_ratio: 1.3, status: injection_ineffective, note: "C0 污染/fio 时序待复测" }
+    quiet:  { args: "", accept_min_ratio: 1.15 }
+
+  P3-SW-A:
+    inject_kind: "8a"   # INLINE_INJECT=8a in train_bench
+    mode: host_bound
+    loud:   { args: "", accept_min_ratio: 1.3, status: bite_ok, note: "bite2 C1/C0=3.15；窗内 GC+stall0.25s" }
+
+scoring:
+  offline_tool: offline_training_metrics
+  loud_pass3_d_level: 3          # P1-EXT-A/B、P3-EXT-A @ loud2
+  d4_requires: probing_sql
+  probing_pkg: "Probing_plus 0.2.5 (gpu+mx-smi); not PyPI 0.2.4"
+  image_recipe: scripts/probing-failslow/image/
+  competitors: { Greyhound: ENV-BLOCKED, XPUTimer: ENV-BLOCKED }

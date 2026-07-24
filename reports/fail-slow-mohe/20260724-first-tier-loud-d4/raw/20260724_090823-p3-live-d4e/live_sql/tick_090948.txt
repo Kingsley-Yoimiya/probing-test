@@ -1,0 +1,41 @@
+=== tick 3 @ 2026-07-24T09:09:48+08:00 ===
+pgrep_tbp:
+55034 /opt/conda/bin/python3.12 /opt/conda/bin/torchrun --nnodes=2 --nproc_per_node=8 --node_rank=0 --master_addr=10.120.31.88 --master_port=30001 /tmp/tbp.py --iters=500 --warmup=50 --seed=42 --mode=host_bound --model=gpt2 --seq=1024 --batch=8 --run-id=20260724_090823-p3-live-d4e --group=0 --config=C0_baseline --round=1 --out-dir=/workspace/probe-bundle/out/P3-EXT-A/round_1/C0_baseline/ranks
+55112 /opt/conda/bin/python3.12 -u /tmp/tbp.py --iters=500 --warmup=50 --seed=42 --mode=host_bound --model=gpt2 --seq=1024 --batch=8 --run-id=20260724_090823-p3-live-d4e --group=0 --config=C0_baseline --round=1 --out-dir=/workspace/probe-bundle/out/P3-EXT-A/round_1/C0_baseline/ranks
+55113 /opt/conda/bin/python3.12 -u /tmp/tbp.py --iters=500 --warmup=50 --seed=42 --mode=host_bound --model=gpt2 --seq=1024 --batch=8 --run-id=20260724_090823-p3-live-d4e --group=0 --config=C0_baseline --round=1 --out-dir=/workspace/probe-bundle/out/P3-EXT-A/round_1/C0_baseline/ranks
+55114 /opt/conda/bin/python3.12 -u /tmp/tbp.py --iters=500 --warmup=50 --seed=42 --mode=host_bound --model=gpt2 --seq=1024 --batch=8 --run-id=20260724_090823-p3-live-d4e --group=0 --config=C0_baseline --round=1 --out-dir=/workspace/probe-bundle/out/P3-EXT-A/round_1/C0_baseline/ranks
+55115 /opt/conda/bin/python3.12 -u /tmp/tbp.py --iters=500 --warmup=50 --seed=42 --mode=host_bound --model=gpt2 --seq=1024 --batch=8 --run-id=20260724_090823-p3-live-d4e --group=0 --config=C0_baseline --round=1 --out-dir=/workspace/probe-bundle/out/P3-EXT-A/round_1/C0_baseline/ranks
+pgrep_stress:
+52275 stress-ng
+52301 stress-ng
+52302 stress-ng
+52303 stress-ng
+52304 stress-ng
+PID=56989
+=== SHOW TABLES ===
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/workspace/probe-bundle/pydeps/bin/probing", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspace/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: Connection refused (os error 111)
+=== cpu.tasks ===
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/workspace/probe-bundle/pydeps/bin/probing", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspace/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: Connection refused (os error 111)
+=== cpu.utilization ===
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/workspace/probe-bundle/pydeps/bin/probing", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspace/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: Connection refused (os error 111)

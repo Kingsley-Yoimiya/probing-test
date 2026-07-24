@@ -1,0 +1,11 @@
+### t1 2026-07-24T13:26:22+08:00
+resource=cpu
+some avg10=4.17 avg60=4.26 avg300=4.04 total=59585634638
+full avg10=3.25 avg60=3.52 avg300=3.76 total=29396349321
+resource=memory
+some avg10=0.00 avg60=0.00 avg300=0.00 total=81964
+full avg10=0.00 avg60=0.00 avg300=0.00 total=81456
+resource=io
+some avg10=0.00 avg60=0.00 avg300=0.00 total=31502401
+full avg10=0.00 avg60=0.00 avg300=0.00 total=25668813
+loadavg=16.66 9.11 8.33 27/6095 130515

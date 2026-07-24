@@ -1,0 +1,4 @@
+SIDECAR_WARMUP kind=cube seconds=8.0
+SIDECAR_START kind=cube duty=0.9 period=200ms
+SIDECAR_SIGNAL signum=15 ops=3308676
+SIDECAR_STOP ops=3308677

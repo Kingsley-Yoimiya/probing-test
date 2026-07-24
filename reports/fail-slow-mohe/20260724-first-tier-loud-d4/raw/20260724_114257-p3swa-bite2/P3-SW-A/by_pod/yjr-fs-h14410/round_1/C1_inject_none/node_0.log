@@ -1,0 +1,19 @@
+W0724 11:45:40.923000 99950 site-packages/torch/distributed/run.py:792] 
+W0724 11:45:40.923000 99950 site-packages/torch/distributed/run.py:792] *****************************************
+W0724 11:45:40.923000 99950 site-packages/torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0724 11:45:40.923000 99950 site-packages/torch/distributed/run.py:792] *****************************************
+yjr-fs-h14410:100021:100021 [0] MCCL INFO /root/mxlog/mccl/mccl.100021.2026_07_24_11_45_49.log
+yjr-fs-h14410:100026:100026 [5] MCCL INFO /root/mxlog/mccl/mccl.100026.2026_07_24_11_45_49.log
+yjr-fs-h14410:100028:100028 [7] MCCL INFO /root/mxlog/mccl/mccl.100028.2026_07_24_11_45_49.log
+yjr-fs-h14410:100025:100025 [4] MCCL INFO /root/mxlog/mccl/mccl.100025.2026_07_24_11_45_49.log
+yjr-fs-h14410:100023:100023 [2] MCCL INFO /root/mxlog/mccl/mccl.100023.2026_07_24_11_45_49.log
+yjr-fs-h14410:100027:100027 [6] MCCL INFO /root/mxlog/mccl/mccl.100027.2026_07_24_11_45_49.log
+yjr-fs-h14410:100024:100024 [3] MCCL INFO /root/mxlog/mccl/mccl.100024.2026_07_24_11_45_49.log
+yjr-fs-h14410:100022:100022 [1] MCCL INFO /root/mxlog/mccl/mccl.100022.2026_07_24_11_45_49.log
+DONE world=16 out=/workspace/probe-bundle/out/P3-SW-A/round_1/C1_inject_none/ranks/rank_0000.jsonl
+
+yjr-fs-h14410:100027:100167 [0] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:40 MCCL WARN socketProgressOpt: Call to recv from 10.120.31.88<32909> failed : Connection reset by peer
+
+yjr-fs-h14410:100021:100171 [0] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:40 MCCL WARN socketProgressOpt: Call to recv from 10.120.31.88<47707> failed : Connection reset by peer
+
+yjr-fs-h14410:100027:100167 [32700] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:608 MCCL WARN socketStartConnect: Connect to 10.120.31.88<32909> failed : Software caused connection abort

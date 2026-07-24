@@ -1,0 +1,17 @@
+W0724 09:08:36.765000 55034 site-packages/torch/distributed/run.py:792] 
+W0724 09:08:36.765000 55034 site-packages/torch/distributed/run.py:792] *****************************************
+W0724 09:08:36.765000 55034 site-packages/torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0724 09:08:36.765000 55034 site-packages/torch/distributed/run.py:792] *****************************************
+yjr-fs-h14410:55112:55112 [0] MCCL INFO /root/mxlog/mccl/mccl.55112.2026_07_24_09_08_45.log
+yjr-fs-h14410:55114:55114 [2] MCCL INFO /root/mxlog/mccl/mccl.55114.2026_07_24_09_08_45.log
+yjr-fs-h14410:55117:55117 [5] MCCL INFO /root/mxlog/mccl/mccl.55117.2026_07_24_09_08_45.log
+yjr-fs-h14410:55115:55115 [3] MCCL INFO /root/mxlog/mccl/mccl.55115.2026_07_24_09_08_45.log
+yjr-fs-h14410:55113:55113 [1] MCCL INFO yjr-fs-h14410:55118:55118 [6] MCCL INFO /root/mxlog/mccl/mccl.55113.2026_07_24_09_08_45.log/root/mxlog/mccl/mccl.55118.2026_07_24_09_08_45.log
+
+yjr-fs-h14410:55116:55116 [4] MCCL INFO /root/mxlog/mccl/mccl.55116.2026_07_24_09_08_45.log
+yjr-fs-h14410:55119:55119 [7] MCCL INFO /root/mxlog/mccl/mccl.55119.2026_07_24_09_08_45.log
+DONE world=16 out=/workspace/probe-bundle/out/P3-EXT-A/round_1/C0_baseline/ranks/rank_0000.jsonl
+
+yjr-fs-h14410:55116:55260 [0] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:40 MCCL WARN socketProgressOpt: Call to recv from 10.120.31.88<37397> failed : Connection reset by peer
+
+yjr-fs-h14410:55116:55260 [0] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:40 MCCL WARN socketProgressOpt: Call to recv from 10.120.31.88<40325> failed : Connection reset by peer

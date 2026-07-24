@@ -31,3 +31,6 @@ docs/assets/latest/*_render.html
 *.bak
 report.json
 *.pth.tar
+
+# Fail-Slow image build cache (wheels)
+scripts/fail-slow/image/.cache/

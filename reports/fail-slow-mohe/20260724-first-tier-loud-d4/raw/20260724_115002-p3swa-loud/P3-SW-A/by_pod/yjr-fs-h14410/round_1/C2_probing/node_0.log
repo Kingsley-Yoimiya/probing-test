@@ -1,0 +1,53 @@
+W0724 11:56:35.480000 104718 site-packages/torch/distributed/run.py:792] 
+W0724 11:56:35.480000 104718 site-packages/torch/distributed/run.py:792] *****************************************
+W0724 11:56:35.480000 104718 site-packages/torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0724 11:56:35.480000 104718 site-packages/torch/distributed/run.py:792] *****************************************
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)Activating probing in 'nested' mode (all child processes)Activating probing in 'nested' mode (all child processes)Activating probing in 'nested' mode (all child processes)
+
+
+
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+[11:56:37.751][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.761][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.781][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.785][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.794][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.820][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.840][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+[11:56:37.884][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+yjr-fs-h14410:104795:104795 [0] MCCL INFO /root/mxlog/mccl/mccl.104795.2026_07_24_11_56_43.log
+yjr-fs-h14410:104796:104796 [1] MCCL INFO /root/mxlog/mccl/mccl.104796.2026_07_24_11_56_43.log
+yjr-fs-h14410:104799:104799 [4] MCCL INFO /root/mxlog/mccl/mccl.104799.2026_07_24_11_56_43.log
+yjr-fs-h14410:104798:104798 [3] MCCL INFO /root/mxlog/mccl/mccl.104798.2026_07_24_11_56_43.log
+yjr-fs-h14410:104801:104801 [6] MCCL INFO /root/mxlog/mccl/mccl.104801.2026_07_24_11_56_43.log
+yjr-fs-h14410:104797:104797 [2] MCCL INFO /root/mxlog/mccl/mccl.104797.2026_07_24_11_56_43.log
+yjr-fs-h14410:104802:104802 [7] MCCL INFO /root/mxlog/mccl/mccl.104802.2026_07_24_11_56_43.log
+yjr-fs-h14410:104800:104800 [5] MCCL INFO /root/mxlog/mccl/mccl.104800.2026_07_24_11_56_43.log
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+/workspace/probe-bundle/pydeps/probing/profiling/torch/module_utils.py:88: FutureWarning: `torch.distributed.reduce_op` is deprecated, please use `torch.distributed.ReduceOp` instead
+  objs = [obj for obj in gc.get_objects() if isinstance(obj, torch.nn.Module)]
+[2026-07-24T03:57:55Z ERROR probing_server::engine] Error executing SELECT query 'SELECT timestamp, step, module, stage, duration, allocated FROM python.torch_trace ORDER BY timestamp DESC LIMIT 50': Schema error: No field named step. Valid fields are python.torch_trace.timestamp, python.torch_trace.allocated, python.torch_trace.allocated_delta, python.torch_trace.cached, python.torch_trace.duration, python.torch_trace.global_step, python.torch_trace.local_step, python.torch_trace.max_allocated, python.torch_trace.max_allocated_delta, python.torch_trace.max_cached, python.torch_trace.micro_batches, python.torch_trace.micro_step, python.torch_trace.module, python.torch_trace.rank, python.torch_trace.role, python.torch_trace.seq, python.torch_trace.stage, python.torch_trace.time_offset, python.torch_trace.world_size.
+[2026-07-24T03:57:55Z ERROR probing_server::engine] Error executing SELECT query 'SELECT ts, device_id, name, gpu_util_pct, mem_used_pct, used_bytes FROM gpu.utilization ORDER BY ts DESC LIMIT 100': Error during planning: table 'probe.gpu.utilization' not found
+[2026-07-24T03:57:55Z ERROR probing_server::engine] Error executing SELECT query 'SELECT * FROM process.gpu_users LIMIT 20': Error during planning: table 'probe.process.gpu_users' not found
+[2026-07-24T03:57:55Z ERROR probing_server::engine] Error executing SELECT query 'SELECT * FROM process.cpu_stats LIMIT 20': Error during planning: table 'probe.process.cpu_stats' not found
+DONE world=16 out=/workspace/probe-bundle/out/P3-SW-A/round_1/C2_probing/ranks/rank_0000.jsonl
+
+yjr-fs-h14410:104800:105006 [32748] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:608 MCCL WARN socketStartConnect: Connect to 10.120.31.88<32899> failed : Software caused connection abort
+
+yjr-fs-h14410:104796:105011 [32725] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:608 MCCL WARN socketStartConnect: Connect to 10.120.31.88<47305> failed : Software caused connection abort

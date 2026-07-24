@@ -1,0 +1,11 @@
+SQL: SELECT ts, device_id, name, gpu_util_pct, mem_used_pct, used_bytes FROM gpu.utilization ORDER BY ts DESC LIMIT 100
+----
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/workspace/probe-bundle/pydeps/bin/probing", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/workspace/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: error: QueryError: Internal - Error during planning: table 'probe.gpu.utilization' not found
+error=query_rc_1

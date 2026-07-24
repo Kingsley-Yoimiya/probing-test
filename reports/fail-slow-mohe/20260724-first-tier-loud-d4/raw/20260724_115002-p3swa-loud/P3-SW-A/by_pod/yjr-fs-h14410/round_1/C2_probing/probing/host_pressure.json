@@ -1,0 +1,114 @@
+{
+  "dt_s": 2.0,
+  "cpu_some_rate_us_s": 34456.5,
+  "io_some_rate_us_s": 0.5,
+  "memory_some_rate_us_s": 0.0,
+  "cpu_some_avg10_t1": 3.68,
+  "threshold_cpu_rate_us_s": 200000.0,
+  "threshold_io_rate_us_s": 50000.0,
+  "threshold_rate_us_s": 200000.0,
+  "hit": false,
+  "evidence": "host_psi_no_hit",
+  "t0": {
+    "cpu": {
+      "some": {
+        "raw": "some avg10=3.83 avg60=3.88 avg300=4.11 total=59350590228",
+        "avg10": 3.83,
+        "avg60": 3.88,
+        "avg300": 4.11,
+        "total": 59350590228
+      },
+      "full": {
+        "raw": "full avg10=2.63 avg60=2.94 avg300=3.23 total=29177603544",
+        "avg10": 2.63,
+        "avg60": 2.94,
+        "avg300": 3.23,
+        "total": 29177603544
+      }
+    },
+    "memory": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=81964",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81964
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=81456",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81456
+      }
+    },
+    "io": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=31416909",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 31416909
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=25588198",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 25588198
+      }
+    },
+    "loadavg": "38.63 33.57 26.05 17/6047 106331"
+  },
+  "t1": {
+    "cpu": {
+      "some": {
+        "raw": "some avg10=3.68 avg60=3.85 avg300=4.10 total=59350659141",
+        "avg10": 3.68,
+        "avg60": 3.85,
+        "avg300": 4.1,
+        "total": 59350659141
+      },
+      "full": {
+        "raw": "full avg10=2.51 avg60=2.91 avg300=3.22 total=29177650652",
+        "avg10": 2.51,
+        "avg60": 2.91,
+        "avg300": 3.22,
+        "total": 29177650652
+      }
+    },
+    "memory": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=81964",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81964
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=81456",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 81456
+      }
+    },
+    "io": {
+      "some": {
+        "raw": "some avg10=0.00 avg60=0.00 avg300=0.00 total=31416910",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 31416910
+      },
+      "full": {
+        "raw": "full avg10=0.00 avg60=0.00 avg300=0.00 total=25588199",
+        "avg10": 0.0,
+        "avg60": 0.0,
+        "avg300": 0.0,
+        "total": 25588199
+      }
+    },
+    "loadavg": "38.63 33.57 26.05 51/6047 106337"
+  }
+}

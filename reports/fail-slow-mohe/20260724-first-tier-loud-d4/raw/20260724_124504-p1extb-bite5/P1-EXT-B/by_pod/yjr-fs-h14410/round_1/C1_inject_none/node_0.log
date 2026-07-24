@@ -1,0 +1,18 @@
+W0724 12:47:06.282000 121697 site-packages/torch/distributed/run.py:792] 
+W0724 12:47:06.282000 121697 site-packages/torch/distributed/run.py:792] *****************************************
+W0724 12:47:06.282000 121697 site-packages/torch/distributed/run.py:792] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0724 12:47:06.282000 121697 site-packages/torch/distributed/run.py:792] *****************************************
+yjr-fs-h14410:121768:121768 [0] MCCL INFO /root/mxlog/mccl/mccl.121768.2026_07_24_12_47_14.log
+yjr-fs-h14410:121770:121770 [2] MCCL INFO /root/mxlog/mccl/mccl.121770.2026_07_24_12_47_14.log
+yjr-fs-h14410:121771:121771 [3] MCCL INFO /root/mxlog/mccl/mccl.121771.2026_07_24_12_47_14.log
+yjr-fs-h14410:121772:121772 [4] MCCL INFO /root/mxlog/mccl/mccl.121772.2026_07_24_12_47_14.log
+yjr-fs-h14410:121775:121775 [7] MCCL INFO /root/mxlog/mccl/mccl.121775.2026_07_24_12_47_14.log
+yjr-fs-h14410:121773:121773 [5] MCCL INFO /root/mxlog/mccl/mccl.121773.2026_07_24_12_47_14.log
+yjr-fs-h14410:121769:121769 [1] MCCL INFO /root/mxlog/mccl/mccl.121769.2026_07_24_12_47_14.log
+yjr-fs-h14410:121774:121774 [6] MCCL INFO /root/mxlog/mccl/mccl.121774.2026_07_24_12_47_14.log
+INLINE_HBM_ALLOC mb=512 copies/step=40
+DONE world=16 out=/workspace/probe-bundle/out/P1-EXT-B/round_1/C1_inject_none/ranks/rank_0000.jsonl
+
+yjr-fs-h14410:121768:121916 [32604] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:608 MCCL WARN socketStartConnect: Connect to 10.120.28.205<33445> failed : Software caused connection abort
+
+yjr-fs-h14410:121771:121914 [32516] /workspace/out/Release/build/linux/x86_64/mccl/macaify/src/misc/socket.cc:608 MCCL WARN socketStartConnect: Connect to 10.120.31.88<35389> failed : Software caused connection abort

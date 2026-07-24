@@ -1,0 +1,9 @@
+device=7
+gpu_util_pct=99.0
+hbm_bw_mbs=1200207.0
+n_procs=10
+has_sidecar_inject=False
+threshold_gpu_util_pct=50.0
+threshold_hbm_bw_mbs=500.0
+hit=True
+evidence=host_mx_smi_gpu_util

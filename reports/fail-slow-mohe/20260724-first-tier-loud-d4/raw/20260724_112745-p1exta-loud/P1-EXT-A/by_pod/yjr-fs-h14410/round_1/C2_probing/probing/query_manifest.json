@@ -1,0 +1,52 @@
+{
+  "case": "P1-EXT-A",
+  "pid": "131606",
+  "attach": "ok",
+  "ts": "2026-07-24T13:29:39+08:00",
+  "victim_local_rank": 7,
+  "tables_present": {
+    "gpu.utilization": false,
+    "cpu.utilization": true,
+    "cpu.tasks": true,
+    "python.torch_trace": false,
+    "process.gpu_users": false,
+    "process.cpu_stats": false
+  },
+  "tables_missing": [
+    "gpu.utilization",
+    "python.torch_trace",
+    "process.gpu_users",
+    "process.cpu_stats"
+  ],
+  "query_status": {
+    "show_tables": "ok",
+    "torch_trace_tail": "error=query_rc_1",
+    "gpu_util": "error=query_rc_1",
+    "cpu_util": "ok",
+    "process_gpu_users": "error=query_rc_1",
+    "process_cpu_stats": "error=query_rc_1",
+    "cpu_tasks": "ok",
+    "p1_gpu_window": "error=query_rc_1",
+    "p1_process_envs": "error=query_rc_1"
+  },
+  "dump_dir": "/workspace/probe-bundle/out/P1-EXT-A/round_1/C2_probing/probing",
+  "host_pressure": {
+    "hit": false,
+    "evidence": "host_psi_no_hit",
+    "cpu_some_rate_us_s": 107576.0,
+    "io_some_rate_us_s": 1.5,
+    "threshold_cpu_rate_us_s": 200000.0,
+    "threshold_io_rate_us_s": 50000.0,
+    "threshold_rate_us_s": 200000.0
+  },
+  "host_gpu": {
+    "hit": true,
+    "evidence": "host_mx_smi_gpu_util",
+    "gpu_util_pct": 99.0,
+    "hbm_bw_mbs": 1200207.0,
+    "n_procs": 10,
+    "threshold_gpu_util_pct": 50.0,
+    "threshold_hbm_bw_mbs": 500.0
+  },
+  "notes": "gpu.utilization 在 MetaX 上依赖 CudaBackend；cu-bridge libcuda 缺符号会 panic，故可能长期 missing。P1 EXT：dump 同窗 mx-smi（host_gpu.json）可作 GPU util/HBM 旁路。P3 EXT：cpu.tasks 常仅本进程；dump 同窗 host PSI 可作外部 CPU/IO 争用证据。"
+}

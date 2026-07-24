@@ -1,0 +1,23 @@
+# 新建实验 pod 时加上这段，避免默认 /dev/shm=64Mi。
+# Docker 等价：docker run --shm-size=32g …
+# containerd/k8s 标准做法：emptyDir medium=Memory 挂到 /dev/shm
+#
+# 已在跑的 privileged pod 可不用重建：scripts/probing-failslow/ensure_shm.sh
+apiVersion: v1
+kind: Pod
+metadata:
+  name: EXAMPLE-with-shm
+spec:
+  containers:
+    - name: t
+      image: EXAMPLE
+      securityContext:
+        privileged: true
+      volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+  volumes:
+    - name: dshm
+      emptyDir:
+        medium: Memory
+        sizeLimit: 32Gi

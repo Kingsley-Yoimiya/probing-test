@@ -1,0 +1,5 @@
+[13:28:44.798][MCR][E]mc_device.cpp            :428 : Signal SIGUSR2 already has a custom handler, will not overwrite it!
+SIDECAR_WARMUP kind=cube seconds=8.0
+SIDECAR_START kind=cube duty=0.9 period=200ms
+SIDECAR_SIGNAL signum=15 ops=3541794
+SIDECAR_STOP ops=3541795

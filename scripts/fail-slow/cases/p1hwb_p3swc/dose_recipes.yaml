@@ -1,0 +1,29 @@
+# P1-HW-B / P3-SW-C 隔离剂量（OUTLINE 1B / 8C）
+# 不覆盖共享 dose_recipes.yaml；本战役用 DOSE_FILE 或 run_abc.sh 读本文件。
+
+defaults:
+  sidecar_warmup_s: 8
+  sidecar_local_rank: 7
+  inject_measure_window: [100, 300]
+  host_bound_matmul: 768
+  nnodes: 8
+  nproc: 8
+  world_size: 64
+
+cases:
+  P1-HW-B:
+    outline: 1B
+    inject_kind: "1b"   # sidecar_inject_v2 progressive HBM ramp（非 freq）
+    mode: gpu_bound
+    # MetaX：外挂 sidecar 若咬空 → run_abc 设 USE_INLINE_HBM_RAMP=1 走渐进 inline
+    loud:   { args: "", accept_min_ratio: 1.3, note: "duty 0.1→0.9 over inject window" }
+    quiet:  { args: "", accept_min_ratio: 1.15 }
+    masked: { args: "", accept_min_ratio: 1.05 }
+
+  P3-SW-C:
+    outline: 8C
+    inject_kind: "8c"   # 监控进程泄漏（线程 + 1MB/3s）
+    mode: host_bound
+    loud:   { args: "", accept_min_ratio: 1.3, note: "需 host_bound；调泄漏速率使 C1/C0 可测" }
+    quiet:  { args: "", accept_min_ratio: 1.15 }
+    masked: { args: "", accept_min_ratio: 1.05 }

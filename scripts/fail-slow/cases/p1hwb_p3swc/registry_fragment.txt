@@ -1,0 +1,4 @@
+# 纠正后的 campaign 行（共享 run_campaign.sh 里 P1-HW-B 误写成 freq，本战役勿用那行）
+# case_id|inject_kind|mode|inject_args|note
+P1-HW-B|1b|gpu_bound||OUTLINE 1B 显存带宽渐进衰减（sidecar_inject_v2）
+P3-SW-C|8c|host_bound||OUTLINE 8C 监控程序自身泄漏

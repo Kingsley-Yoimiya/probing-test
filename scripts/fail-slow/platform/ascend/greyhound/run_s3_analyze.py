@@ -20,31 +20,24 @@ import sys
 import time
 from pathlib import Path
 
+# 让 `import collect_seq` 找到同目录 helper
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-def load_durations_from_jsonl(path: Path) -> list[float]:
-    """按 pid 聚合 AllReduce，取全局按时间排序的 dur_us → 伪 call_time 序列。"""
-    rows = []
-    with path.open() as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            o = json.loads(line)
-            if o.get("op") != "AllReduce":
-                continue
-            rows.append(o)
-    if not rows:
-        raise SystemExit(f"no AllReduce rows in {path}")
-    rows.sort(key=lambda r: (r.get("t0", 0.0), r.get("pid", 0), r.get("seq", 0)))
-    # call_time：累积起点（秒）；call_id：固定 0 表示同一类集合通信
-    call_time = []
-    call_id = []
-    t_cursor = 0.0
-    for r in rows:
-        dur_s = float(r.get("dur_us", 0.0)) * 1e-6
-        call_time.append(t_cursor)
-        call_id.append(0)
-        t_cursor += max(dur_s, 1e-6)
+
+def load_durations_from_jsonl(path: Path) -> tuple[list[int], list[float]]:
+    """从真实 collect JSONL 还原**单 rank** 的 (call_id, call_time)。
+
+    用 `collect_seq`：按 pid 分 rank、(op,count) 签名→稳定 call_id、真实 t0→call_time，
+    选事件最多的 rank 作代表。这样 ACF 能量出真实 per-step 周期（旧实现恒 call_id=0，
+    量不出周期）。不含任何 case 答案。
+    """
+    import collect_seq as cs
+
+    by_pid = cs.group_by_rank(cs.load_events(str(path)))
+    rep = cs.pick_busiest_rank(by_pid)
+    if rep is None:
+        raise SystemExit(f"no collective rows in {path}")
+    call_id, call_time = cs.build_call_sequence(by_pid[rep])
     return call_id, call_time
 
 

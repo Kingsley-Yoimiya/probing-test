@@ -159,7 +159,10 @@ def main() -> None:
     from torch.utils.data import DataLoader, Dataset
 
     io_payload = (args.io_payload or "").strip()
-    io_read = max(0, int(args.io_read_kb)) * 1024
+    # O_DIRECT 要求长度/偏移 4K 对齐
+    io_read = (max(0, int(args.io_read_kb)) * 1024 // 4096) * 4096
+    io_direct = False
+    io_direct_err = ""
     if args.mode == "host_bound" and io_payload and io_read > 0:
         p = Path(io_payload)
         if not p.is_file() or p.stat().st_size < io_read:
@@ -171,6 +174,21 @@ def main() -> None:
                     for _ in range(256):
                         wf.write(chunk)
             dist.barrier()
+        # 探测 O_DIRECT（文件系统不支持则回退 cached pread，并记证据）
+        if hasattr(os, "O_DIRECT"):
+            try:
+                _fd = os.open(io_payload, os.O_RDONLY | os.O_DIRECT)
+                os.close(_fd)
+                io_direct = True
+            except OSError as e:
+                io_direct_err = f"{type(e).__name__}:{e}"
+                io_direct = False
+        if rank == 0:
+            print(
+                f"IO_PAYLOAD={io_payload} io_read={io_read} O_DIRECT={int(io_direct)}"
+                + (f" err={io_direct_err}" if io_direct_err else ""),
+                flush=True,
+            )
 
     class TokenDataset(Dataset):
         def __len__(self):
@@ -183,23 +201,35 @@ def main() -> None:
                 # Loud host 路径可见性：768×768 matmul（仍保持 num_workers=2 / prefetch=2）
                 _ = (rng.standard_normal((768, 768)) @ rng.standard_normal((768, 768))).sum()
                 if io_payload and io_read > 0:
-                    # 同盘随机 pread：与 fio 争用 page cache / 带宽，计入 data_ms
+                    # 同文件随机读：优先 O_DIRECT+对齐缓冲，与 fio --direct=1 争用同一队列
                     try:
+                        import mmap
                         fsz = os.path.getsize(io_payload)
                         off = (int(rng.integers(0, max(1, fsz - io_read))) // 4096) * 4096
-                        fd = os.open(io_payload, os.O_RDONLY)
+                        flags = os.O_RDONLY | (os.O_DIRECT if io_direct else 0)
+                        fd = os.open(io_payload, flags)
                         try:
-                            os.pread(fd, io_read, off)
+                            if io_direct:
+                                mm = mmap.mmap(-1, io_read)
+                                try:
+                                    os.preadv(fd, [mm], off)
+                                finally:
+                                    mm.close()
+                            else:
+                                os.pread(fd, io_read, off)
                         finally:
                             os.close(fd)
                     except OSError:
                         pass
             return torch.from_numpy(buf)
 
-    dl = DataLoader(
-        TokenDataset(), batch_size=B, num_workers=args.dl_workers,
-        pin_memory=True, prefetch_factor=2, persistent_workers=True,
-    )
+    # num_workers=0：主线程同步 IO，使同盘 fio 争用进 data_ms/step_ms；
+    # PyTorch 禁止此时设 prefetch_factor / persistent_workers。
+    _dl_kw = dict(batch_size=B, num_workers=args.dl_workers, pin_memory=True)
+    if args.dl_workers > 0:
+        _dl_kw["prefetch_factor"] = 2
+        _dl_kw["persistent_workers"] = True
+    dl = DataLoader(TokenDataset(), **_dl_kw)
     data_iter = iter(dl)
 
     decompose = bool(args.decompose)
@@ -220,6 +250,7 @@ def main() -> None:
     def step_instrumented(
         force_gc: bool = False,
         gc_stall_s: float = 0.0,
+        data_stall_s: float = 0.0,
         hbm_bufs=None,
         hbm_copies: int = 0,
     ):
@@ -232,6 +263,9 @@ def main() -> None:
             # 用可控 stall 模拟 STW，让 barrier 拖全局（仍落在计时区内）。
             if gc_stall_s > 0:
                 time.sleep(gc_stall_s)
+        # P3-SW-B：dataloader 阻塞必须落在计时区内，否则 accept(rank0 step_ms) 咬空
+        if data_stall_s > 0:
+            time.sleep(data_stall_s)
         idx = get_batch()                       # host_bound: 喂数时间落在此处
         t_data = time.perf_counter()
 
@@ -304,6 +338,14 @@ def main() -> None:
         and local == inline_victim
         and node_rank == 0
     )
+    # P3-SW-B：进程内渐进泄漏（外挂 sidecar 在 64-rank/大内存机上咬空）
+    do_inline_8b = (
+        inline == "8b"
+        and local == inline_victim
+        and node_rank == 0
+    )
+    inline_8b_mb = max(4, int(os.environ.get("INLINE_8B_MB", "16")))
+    inline_8b_stall_s = float(os.environ.get("INLINE_8B_STALL_S", "0.25"))
     do_inline_hbm = (
         inline == "hbm"
         and local == inline_victim
@@ -326,9 +368,12 @@ def main() -> None:
         for i in range(args.iters):
             # 内联 8a：measure 窗内每步泄漏 ~4MB；窗内周期性 gc+stall 抬 C1/C0 中位
             in_win_8a = bool(do_inline_8a and inline_start <= i < inline_stop)
+            in_win_8b = bool(do_inline_8b and inline_start <= i < inline_stop)
             in_win_hbm = bool(do_inline_hbm and inline_start <= i < inline_stop)
             if in_win_8a:
                 leak_buf.append(bytearray(1024 * 4 * 1024))  # 4MiB
+            if in_win_8b:
+                leak_buf.append(bytearray(inline_8b_mb * 1024 * 1024))
             force_gc = bool(
                 do_inline_8a
                 and (
@@ -339,6 +384,7 @@ def main() -> None:
             data_ms, compute_ms, comm_ms, wait_ms, step_ms, loss = step_instrumented(
                 force_gc=force_gc,
                 gc_stall_s=(inline_gc_stall_s if force_gc else 0.0),
+                data_stall_s=(inline_8b_stall_s if in_win_8b else 0.0),
                 hbm_bufs=(hbm_bufs if in_win_hbm else None),
                 hbm_copies=(hbm_copies if in_win_hbm else 0),
             )

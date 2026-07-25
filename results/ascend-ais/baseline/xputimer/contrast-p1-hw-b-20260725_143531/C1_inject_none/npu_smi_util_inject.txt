@@ -1,0 +1,33 @@
+	NPU ID                         : 7
+	Chip Count                     : 2
+
+	DDR Capacity(MB)               : 0
+	DDR Usage Rate(%)              : 0
+	DDR Hugepages Total(page)      : 0
+	DDR Hugepages Usage Rate(%)    : 0
+	HBM Capacity(MB)               : 65536
+	HBM Usage Rate(%)              : 21
+	Aicore Usage Rate(%)           : 18
+	Aivector Usage Rate(%)         : 33
+	Aicpu Usage Rate(%)            : 9
+	Ctrlcpu Usage Rate(%)          : 13
+	DDR Bandwidth Usage Rate(%)    : 0
+	HBM Bandwidth Usage Rate(%)    : 42
+	NPU Utilization(%)             : 79
+	Chip ID                        : 0
+
+	DDR Capacity(MB)               : 0
+	DDR Usage Rate(%)              : 0
+	DDR Hugepages Total(page)      : 0
+	DDR Hugepages Usage Rate(%)    : 0
+	HBM Capacity(MB)               : 65536
+	HBM Usage Rate(%)              : 20
+	Aicore Usage Rate(%)           : 36
+	Aivector Usage Rate(%)         : 55
+	Aicpu Usage Rate(%)            : 10
+	Ctrlcpu Usage Rate(%)          : 12
+	DDR Bandwidth Usage Rate(%)    : 0
+	HBM Bandwidth Usage Rate(%)    : 39
+	NPU Utilization(%)             : 82
+	Chip ID                        : 1
+

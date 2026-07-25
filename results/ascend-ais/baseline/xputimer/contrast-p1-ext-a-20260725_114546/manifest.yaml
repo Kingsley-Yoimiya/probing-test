@@ -1,0 +1,21 @@
+case_id: P1-EXT-A
+dose: loud
+phase: contrast
+run_id: contrast-p1-ext-a-20260725_114546
+case_ref: 20260725_011129-yjr-as-c-p1-ext-a-loud
+world_size: 16
+pod: yysong-worker-2
+pool: pool-xpu
+mode: gpu_bound
+inject_kind: inline_cube
+inject_args: "inline_cube_size=8192,inline_cube_mm=64"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+seed: 42
+iters: 500
+warmup: 50
+tool: XPUTimer
+label_prefix: yjr-as-b-xpu
+script: platform/ascend/xputimer/contrast_p1exta.sh
+accept_min_ratio: 1.5

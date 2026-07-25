@@ -1,0 +1,96 @@
+{
+  "coll_ratio": 0.5639926849905833,
+  "coll_pass": false,
+  "step_ratio": 2.2111819235225956,
+  "dose_ok": true,
+  "rbeast_c1": {
+    "ran": true,
+    "n_changepoints": 0,
+    "changepoints": [],
+    "error": null,
+    "rep_rank_pid": 219745,
+    "n_ranks": 16,
+    "n_calls": 286001,
+    "n_uniq_sig": 11,
+    "acf_start": -1,
+    "acf_period": null
+  },
+  "rbeast_c0": {
+    "ran": true,
+    "n_changepoints": 0,
+    "changepoints": [],
+    "error": null,
+    "rep_rank_pid": 214102,
+    "n_ranks": 16,
+    "n_calls": 4401,
+    "n_uniq_sig": 10,
+    "acf_start": 7,
+    "acf_period": 8,
+    "rbeast_last10_avg_ts": 0.0771784782409668
+  },
+  "rbeast_hit": false,
+  "rbeast_fp": false,
+  "autonomous_detect": false,
+  "detect_mode": "no_bite",
+  "oracle_trigger": false,
+  "case_id": "P2-SW-C",
+  "tool": "greyhound",
+  "dose": "loud",
+  "frozen": "topo_5c device_rev=1 topo_extra_ar=512 topo_ar_elems=262144; window [100,300]",
+  "case_ref": "20260725_124102-yjr-as-c-p2-sw-c-loud",
+  "world_size": 16,
+  "pool": "pool-gh",
+  "pod": "yysong-worker-1",
+  "run_id": "contrast-p2-sw-c-20260725_135623",
+  "detect_ok": false,
+  "fairness": "collect_seq_real_per_rank + C0_fp_control",
+  "dose_check_step_only": {
+    "step_ratio": 2.2111819235225956,
+    "dose_ok": true,
+    "pass": true
+  },
+  "dose_check_comm": {
+    "primary": "comm_ms",
+    "comm_ms_median_c0": 6.325,
+    "comm_ms_median_c1": 94.97749999999999,
+    "comm_ms_ratio": 15.016205533596835,
+    "comm_ms_pass": true,
+    "step_ms_median_c0": 75.9425,
+    "step_ms_median_c1": 167.922,
+    "step_ms_ratio": 2.2111729268854727,
+    "step_ms_pass": true,
+    "pass": true,
+    "preferred": "comm_ms",
+    "n_comm_c0": 3200,
+    "n_comm_c1": 3200,
+    "window": [
+      100,
+      300
+    ],
+    "note": "P2-SW-C 主证 comm_ms；金标 C1/C0_comm≈49.86；step≈5.06 旁证不单独 FAIL",
+    "accept_min_ratio": 1.15
+  },
+  "dose_check": {
+    "primary": "comm_ms",
+    "comm_ms_median_c0": 6.325,
+    "comm_ms_median_c1": 94.97749999999999,
+    "comm_ms_ratio": 15.016205533596835,
+    "step_ms_median_c0": 75.9425,
+    "step_ms_median_c1": 167.922,
+    "step_ms_ratio": 2.2111729268854727,
+    "pass": true,
+    "n_c0": 3200,
+    "n_c1": 3200,
+    "window": [
+      100,
+      300
+    ],
+    "note": "P2-SW-C 主证 comm_ms；金标 C1/C0_comm≈49.86；step≈5.06 旁证不单独 FAIL"
+  },
+  "dose_check_combined": {
+    "comm_pass": true,
+    "step_pass": true,
+    "pass": true,
+    "preferred": "comm_ms"
+  }
+}

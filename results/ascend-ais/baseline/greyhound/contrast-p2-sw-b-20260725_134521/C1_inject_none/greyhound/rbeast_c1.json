@@ -1,0 +1,13 @@
+{
+  "ran": true,
+  "n_changepoints": 0,
+  "changepoints": [],
+  "error": null,
+  "rep_rank_pid": 203645,
+  "n_ranks": 16,
+  "n_calls": 4951,
+  "n_uniq_sig": 11,
+  "acf_start": 8,
+  "acf_period": 9,
+  "rbeast_last10_avg_ts": 0.09398758411407471
+}

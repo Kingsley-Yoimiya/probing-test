@@ -1,0 +1,2 @@
+INLINE_8B_LEAK mb/step=16 data_stall_s=0.25 win=[100,300) victim_local=7
+SIDECAR_START kind=inline_8b mb=16 stall_s=0.25 victim=7

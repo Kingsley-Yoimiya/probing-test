@@ -19,7 +19,7 @@ if [ "${ENSURE_SHM:-1}" = "1" ] && [ -f "$PARENT/ensure_shm.sh" ]; then
     bash "$PARENT/ensure_shm.sh" || echo "WARN: ensure_shm failed (继续跑可能 SIGBUS)" >&2
 fi
 
-CASE_ID="${CASE_ID:?need CASE_ID=P2-SW-B|P1-SW-B}"
+CASE_ID="${CASE_ID:?need CASE_ID=P2-SW-A|P2-SW-B|P1-SW-B}"
 RUN_ID="${RUN_ID:?need RUN_ID (timestamped)}"
 PODS="${PODS:?need PODS csv}"
 KUBECONFIG="${KUBECONFIG:?need KUBECONFIG}"
@@ -47,6 +47,23 @@ fi
 # 剂量：INJECT_ARGS 可由 DOSE=loud|quiet|masked 或显式 INJECT_ARGS 覆盖
 DOSE="${DOSE:-loud}"
 case "$CASE_ID" in
+  P2-SW-A)
+    # OUTLINE 5A：健康检查→低速 transport 回退；无真插件时用 IB_DISABLE env 代理
+    CASE="P2-SW-A"; INJECT_KIND="mccl_fallback"
+    case "$DOSE" in
+      quiet)  INJECT_ARGS="${INJECT_ARGS:-ib_disable=1}"
+              ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+              MCCL_STRESS_MB="${MCCL_STRESS_MB:-256}" ;;
+      masked) INJECT_ARGS="${INJECT_ARGS:-ib_disable=1}"
+              ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+              MCCL_STRESS_MB="${MCCL_STRESS_MB:-128}" ;;
+      *)      INJECT_ARGS="${INJECT_ARGS:-ib_disable=1}"
+              ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+              MCCL_STRESS_MB="${MCCL_STRESS_MB:-512}" ;;
+    esac
+    MODE="${MODE:-gpu_bound}"
+    export MCCL_STRESS_MB
+    ;;
   P2-SW-B)
     CASE="P2-SW-B"; INJECT_KIND="mccl_algo"
     case "$DOSE" in
@@ -71,7 +88,7 @@ case "$CASE_ID" in
     esac
     MODE="${MODE:-gpu_bound}"
     ;;
-  *) echo "unsupported CASE_ID=$CASE_ID (P2-SW-B|P1-SW-B)" >&2; exit 2 ;;
+  *) echo "unsupported CASE_ID=$CASE_ID (P2-SW-A|P2-SW-B|P1-SW-B)" >&2; exit 2 ;;
 esac
 
 run_config() {

@@ -1,0 +1,6 @@
+INLINE_INJECT kind=hccl_algo
+SIDECAR_START kind=hccl_algo
+HCCL_ALGO=level0:NA;level1=ring
+HCCL_STRESS_MB=512
+HCCL_BUFFSIZE=8
+SIDECAR_STOP

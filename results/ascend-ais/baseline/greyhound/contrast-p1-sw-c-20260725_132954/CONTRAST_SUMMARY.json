@@ -1,0 +1,72 @@
+{
+  "coll_ratio": 1.026725829051845,
+  "coll_pass": false,
+  "step_ratio": 1.0239518571656305,
+  "dose_ok": false,
+  "rbeast_c1": {
+    "ran": true,
+    "n_changepoints": 0,
+    "changepoints": [],
+    "error": null,
+    "rep_rank_pid": 189590,
+    "n_ranks": 16,
+    "n_calls": 4401,
+    "n_uniq_sig": 10,
+    "acf_start": 7,
+    "acf_period": 8,
+    "rbeast_last10_avg_ts": 0.0763934850692749
+  },
+  "rbeast_c0": {
+    "ran": true,
+    "n_changepoints": 0,
+    "changepoints": [],
+    "error": null,
+    "rep_rank_pid": 185321,
+    "n_ranks": 16,
+    "n_calls": 4401,
+    "n_uniq_sig": 10,
+    "acf_start": 7,
+    "acf_period": 8,
+    "rbeast_last10_avg_ts": 0.07628500461578369
+  },
+  "rbeast_hit": false,
+  "rbeast_fp": false,
+  "autonomous_detect": false,
+  "detect_mode": "no_bite",
+  "oracle_trigger": false,
+  "case_id": "P1-SW-C",
+  "tool": "greyhound",
+  "dose": "loud",
+  "frozen": "INLINE 2c n=1024 every=1 fallback_s=0.25 victim=7; window [100,300]",
+  "case_ref": "20260725_121105-yjr-as-c-p1-sw-c-loud",
+  "world_size": 16,
+  "pool": "pool-gh",
+  "pod": "yysong-worker-1",
+  "run_id": "contrast-p1-sw-c-20260725_132954",
+  "detect_ok": false,
+  "fairness": "collect_seq_real_per_rank + C0_fp_control",
+  "tip_dose_check": {
+    "victim_local_rank": 7,
+    "step_ms_median_c0": 75.239,
+    "step_ms_median_c1": 77.22999999999999,
+    "step_ms_median_ratio": 1.0264623400098352,
+    "step_ms_p99_ratio": 0.996964899057601,
+    "step_ms_max_c0": 802.577,
+    "step_ms_max_c1": 3241.012,
+    "step_ms_max_ratio": 4.038256765394474,
+    "tip_step": 100,
+    "tip_step_ms": 3241.012,
+    "pass": true,
+    "note": "P1-SW-C tip/max gate; median often blind; Probing gold tip max≈4.63",
+    "window": [
+      100,
+      300
+    ]
+  },
+  "dose_check_combined": {
+    "step_ms_median_pass": false,
+    "tip_max_pass": true,
+    "pass": true,
+    "preferred": "tip_max"
+  }
+}

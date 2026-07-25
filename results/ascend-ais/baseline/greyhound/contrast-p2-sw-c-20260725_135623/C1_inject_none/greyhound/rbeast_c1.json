@@ -1,0 +1,12 @@
+{
+  "ran": true,
+  "n_changepoints": 0,
+  "changepoints": [],
+  "error": null,
+  "rep_rank_pid": 219745,
+  "n_ranks": 16,
+  "n_calls": 286001,
+  "n_uniq_sig": 11,
+  "acf_start": -1,
+  "acf_period": null
+}

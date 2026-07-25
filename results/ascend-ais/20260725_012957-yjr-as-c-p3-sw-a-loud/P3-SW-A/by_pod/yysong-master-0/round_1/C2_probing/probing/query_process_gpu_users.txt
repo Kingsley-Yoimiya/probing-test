@@ -1,0 +1,10 @@
+SQL: SELECT * FROM process.gpu_users LIMIT 20
+----
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/data/yinjinrun.p-huawei/probe-bundle/pydeps/bin/probing", line 6, in <module>
+    sys.exit(main())
+  File "/data/yinjinrun.p-huawei/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: error: QueryError: Internal - Error during planning: table 'probe.process.gpu_users' not found
+error=query_rc_1

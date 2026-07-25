@@ -1,0 +1,3 @@
+SQL: SELECT timestamp, step, module, stage, duration, allocated FROM python.torch_trace ORDER BY timestamp DESC LIMIT 50
+----
+error=no_probing_attach

@@ -1,0 +1,10 @@
+SQL: SELECT key, value FROM process.envs WHERE key LIKE 'INLINE%' OR key LIKE 'MACA%' OR key LIKE 'CUDA%' LIMIT 50
+----
+sending ctrl commands via unix socket...
+Traceback (most recent call last):
+  File "/data/yinjinrun.p-huawei/probe-bundle/pydeps/bin/probing", line 6, in <module>
+    sys.exit(main())
+  File "/data/yinjinrun.p-huawei/probe-bundle/pydeps/probing/cli/__main__.py", line 14, in main
+    probing.cli_main(["probing"] + sys.argv[1:])
+RuntimeError: error: QueryError: Internal - Schema error: No field named key. Valid fields are process.envs.name, process.envs.value.
+error=query_rc_1

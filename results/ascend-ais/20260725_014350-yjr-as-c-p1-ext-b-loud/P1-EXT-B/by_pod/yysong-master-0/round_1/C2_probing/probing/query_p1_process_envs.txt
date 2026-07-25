@@ -1,0 +1,3 @@
+SQL: SELECT key, value FROM process.envs WHERE key LIKE 'INLINE%' OR key LIKE 'MACA%' OR key LIKE 'CUDA%' LIMIT 50
+----
+error=no_probing_attach

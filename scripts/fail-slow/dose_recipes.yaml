@@ -24,6 +24,14 @@ cases:
     quiet:  { args: "inline_hbm_mb=128,inline_hbm_copies=3", accept_min_ratio: 1.15 }
     masked: { args: "inline_hbm_mb=64,inline_hbm_copies=1", accept_min_ratio: 1.05 }
 
+  P1-EXT-C:
+    inject_kind: "3c"   # sidecar 多进程 GPU 时间片抖动（timeslice）
+    mode: gpu_bound
+    # 2026-07-25 mohe64：EARLY-after-warmup NPROC=6 MAT=4096；C1/C0≈80.7
+    loud:   { args: "nproc=6,mat=4096,early_after_warmup=1", accept_min_ratio: 1.3, measured_c1_c0: 80.70, note: "a3 PASS; PRE_TRAIN 晚到假阴；EARLY 咬合" }
+    quiet:  { args: "nproc=4,mat=2048,early_after_warmup=1", accept_min_ratio: 1.15 }
+    masked: { args: "nproc=2,mat=2048,early_after_warmup=1", accept_min_ratio: 1.05 }
+
   P3-EXT-A:
     inject_kind: stress_cpu
     mode: host_bound

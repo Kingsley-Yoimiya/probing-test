@@ -1,0 +1,25 @@
+{
+  "dt_s": 2.0,
+  "cpu_some_rate_us_s": null,
+  "io_some_rate_us_s": null,
+  "memory_some_rate_us_s": null,
+  "cpu_some_avg10_t1": null,
+  "threshold_cpu_rate_us_s": 200000.0,
+  "threshold_io_rate_us_s": 50000.0,
+  "threshold_mem_rate_us_s": 50000.0,
+  "threshold_rate_us_s": 200000.0,
+  "hit": false,
+  "evidence": "host_psi_no_hit",
+  "t0": {
+    "cpu MISSING": {},
+    "memory MISSING": {},
+    "io MISSING": {},
+    "loadavg": "54.04 53.01 52.29 6/13915 634172"
+  },
+  "t1": {
+    "cpu MISSING": {},
+    "memory MISSING": {},
+    "io MISSING": {},
+    "loadavg": "56.44 53.53 52.47 8/13881 635076"
+  }
+}

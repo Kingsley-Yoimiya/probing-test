@@ -1,0 +1,24 @@
+case_id: P1-SW-B
+dose: loud
+phase: contrast
+run_id: contrast-p1-sw-b-20260725_132011
+case_ref: 20260725_115732-yjr-as-c-p1-sw-b-loud
+world_size: 16
+pod: yysong-worker-1
+pool: pool-gh
+mode: gpu_bound
+inject_kind: inline_2b
+inject_args: "rare_seq=1536,every=1"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+seed: 42
+iters: 500
+warmup: 50
+tool: Greyhound
+label_prefix: yjr-as-b-gh
+preload: /data/yinjinrun.p-huawei/opt/rbeast-fix/libbuiltin_readcyclecounter.so:/data/yinjinrun.p-huawei/probe-bundle/greyhound/libhcclprobe.so
+redis: 127.0.0.1:16379
+fairness: collect_seq_real_per_rank + C0_fp_control
+script: platform/ascend/greyhound/contrast_p1swb.sh
+accept_min_ratio: 1.15

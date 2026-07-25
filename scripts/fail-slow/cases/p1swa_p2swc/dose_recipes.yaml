@@ -25,10 +25,10 @@ cases:
     inject_kind: "5c"
     mode: gpu_bound
     loud:
-      args: "hca_rev=1,topo_extra_ar=16"
+      args: "hca_rev=1,topo_extra_ar=256,shm_disable=1"
       accept_min_ratio: 1.15
-      env: { TOPO_EXTRA_AR: "16" }
-      note: "HCA 逆序 + TOPO_EXTRA_AR；禁止默认 P2P_DISABLE（64卡 hang）；集群中断前未标定成功"
+      env: { TOPO_EXTRA_AR: "256", TOPO_SHM_DISABLE: "1" }
+      note: "a3 try AR=256+SHM; a2=1.146@128 FAIL_WEAK; 禁 P2P_DISABLE; hang→退回仅AR=256"
     quiet:
       args: "hca_rev=1,topo_extra_ar=4"
       accept_min_ratio: 1.1

@@ -1,0 +1,51 @@
+sending ctrl commands via unix socket...
+
+sending ctrl commands via unix socket...
+
+sending ctrl commands via unix socket...
+┌──────────────────┬────────────────────┬──────────────────┬───────────────────┐
+│ table_catalog    │ table_schema       │ table_name       │ table_type        │
+├──────────────────┼────────────────────┼──────────────────┼───────────────────┤
+│ global           │ cluster            │ nodes            │ BASE TABLE        │
+│ global           │ cpu                │ tasks            │ BASE TABLE        │
+│ global           │ cpu                │ utilization      │ BASE TABLE        │
+│ global           │ gpu                │ devices          │ BASE TABLE        │
+│ global           │ gpu                │ hccs             │ BASE TABLE        │
+│ global           │ gpu                │ utilization      │ BASE TABLE        │
+│ global           │ probing            │ column_docs      │ BASE TABLE        │
+│ global           │ probing            │ table_docs       │ BASE TABLE        │
+│ global           │ process            │ envs             │ BASE TABLE        │
+│ global           │ process            │ kmsg             │ BASE TABLE        │
+│ global           │ python             │ backtrace        │ BASE TABLE        │
+│ global           │ python             │ comm_collective  │ BASE TABLE        │
+│ global           │ python             │ trace_event      │ BASE TABLE        │
+│ global           │ rdma               │ mlx_hca          │ BASE TABLE        │
+│ global           │ information_schema │ tables           │ VIEW              │
+│ global           │ information_schema │ views            │ VIEW              │
+│ global           │ information_schema │ columns          │ VIEW              │
+│ global           │ information_schema │ df_settings      │ VIEW              │
+│ global           │ information_schema │ schemata         │ VIEW              │
+│ global           │ information_schema │ routines         │ VIEW              │
+│ global           │ information_schema │ parameters       │ VIEW              │
+│ probe            │ cluster            │ nodes            │ BASE TABLE        │
+│ probe            │ cpu                │ tasks            │ BASE TABLE        │
+│ probe            │ cpu                │ utilization      │ BASE TABLE        │
+│ probe            │ gpu                │ devices          │ BASE TABLE        │
+│ probe            │ gpu                │ hccs             │ BASE TABLE        │
+│ probe            │ gpu                │ utilization      │ BASE TABLE        │
+│ probe            │ probing            │ column_docs      │ BASE TABLE        │
+│ probe            │ probing            │ table_docs       │ BASE TABLE        │
+│ probe            │ process            │ envs             │ BASE TABLE        │
+│ probe            │ process            │ kmsg             │ BASE TABLE        │
+│ probe            │ python             │ backtrace        │ BASE TABLE        │
+│ probe            │ python             │ comm_collective  │ BASE TABLE        │
+│ probe            │ python             │ trace_event      │ BASE TABLE        │
+│ probe            │ rdma               │ mlx_hca          │ BASE TABLE        │
+│ probe            │ information_schema │ tables           │ VIEW              │
+│ probe            │ information_schema │ views            │ VIEW              │
+│ probe            │ information_schema │ columns          │ VIEW              │
+│ probe            │ information_schema │ df_settings      │ VIEW              │
+│ probe            │ information_schema │ schemata         │ VIEW              │
+│ probe            │ information_schema │ routines         │ VIEW              │
+│ probe            │ information_schema │ parameters       │ VIEW              │
+└──────────────────┴────────────────────┴──────────────────┴───────────────────┘

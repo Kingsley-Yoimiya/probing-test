@@ -385,14 +385,24 @@ export INLINE_2A_STALL_S=${INLINE_2A_STALL_S:-0.25};"
     fi
     # P2-SW-C：拓扑映射漂移——错误 IB HCA 顺序（Loud 追加 SHM disable 逼绕远路）
     # 注意：NCCL/MCCL_P2P_DISABLE=1 在 64 卡上易导致 init hang，故不默认开启。
+    # TOPO_EXTRA_AR 必须在 host 展开写死进 launcher（勿 \${…} 留给 pod——pod 无此 env 会永远落回 16）。
     if [ "$inj" = "yes" ] && { [ "$INJECT_KIND" = "5c" ] || [ "$INJECT_KIND" = "topo" ]; }; then
+      _topo_ar="${TOPO_EXTRA_AR:-16}"
+      _topo_elems="${TOPO_AR_ELEMS:-1024}"
+      _topo_shm=""
+      if [ "${TOPO_SHM_DISABLE:-0}" = "1" ]; then
+        _topo_shm="export MCCL_SHM_DISABLE=1; export NCCL_SHM_DISABLE=1;"
+      fi
       denv="${denv}
 # OUTLINE 5C：HCA 逆序 + Loud 辅剂量 TOPO_EXTRA_AR（额外 AllReduce 模拟绕远）
 export MCCL_IB_HCA=\${MCCL_IB_HCA_BAD:-xscale_3,xscale_2,xscale_1,xscale_0};
 export NCCL_IB_HCA=\${NCCL_IB_HCA_BAD:-xscale_3,xscale_2,xscale_1,xscale_0};
 export CUDA_DEVICE_ORDER=PCI_BUS_ID;
-export TOPO_EXTRA_AR=\${TOPO_EXTRA_AR:-16};
-printf '%s\\n' 'SIDECAR_WARMUP kind=topo_5c' 'SIDECAR_START kind=topo_5c' >'$out/injection.log';"
+export TOPO_EXTRA_AR=${_topo_ar};
+export TOPO_AR_ELEMS=${_topo_elems};
+${_topo_shm}
+printf '%s\\n' 'SIDECAR_WARMUP kind=topo_5c' 'SIDECAR_START kind=topo_5c' \"TOPO_EXTRA_AR=${_topo_ar} TOPO_AR_ELEMS=${_topo_elems} SHM_DISABLE=${TOPO_SHM_DISABLE:-0}\" >'$out/injection.log';"
+      echo "  topo_5c dose TOPO_EXTRA_AR=${_topo_ar} TOPO_AR_ELEMS=${_topo_elems} SHM_DISABLE=${TOPO_SHM_DISABLE:-0} (no P2P_DISABLE)"
     fi
     # P1-EXT-B：外挂 hbm 在 MetaX 上反复咬空 → 默认内联 D2D（USE_INLINE_HBM=0 可退回 sidecar）
     USE_INLINE_HBM="${USE_INLINE_HBM:-1}"
@@ -460,7 +470,7 @@ export INLINE_HBM_COPIES=${INLINE_HBM_COPIES:-48};"
             < "$HERE_PIPE/dump_probing_sql.sh" 2>/dev/null || true
         fi
         pexec "$MASTER" \
-          "OUT_DIR='$out' CASE='$CASE' CODE_DIR='$CODE_DIR' VICTIM_LOCAL_RANK='$SIDECAR_LOCAL_RANK' \
+          "OUT_DIR='$out' CASE='$CASE' CODE_DIR='$CODE_DIR' VICTIM_LOCAL_RANK='$SIDECAR_LOCAL_RANK' DUMP_TIMEOUT_S=90 \
            bash '$CODE_DIR/dump_probing_sql.sh' >'$out/probing_dump.log' 2>&1; exit 0" 2>/dev/null || true
         echo "  SQL dump attempted → $out/probing/"
       else

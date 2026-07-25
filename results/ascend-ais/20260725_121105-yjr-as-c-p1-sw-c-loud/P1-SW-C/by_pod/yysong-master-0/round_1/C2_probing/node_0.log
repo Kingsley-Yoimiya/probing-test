@@ -1,0 +1,321 @@
+Activating probing in 'nested' mode (all child processes)
+W0725 12:15:07.130000 1707383 site-packages/torch/distributed/run.py:766] 
+W0725 12:15:07.130000 1707383 site-packages/torch/distributed/run.py:766] *****************************************
+W0725 12:15:07.130000 1707383 site-packages/torch/distributed/run.py:766] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W0725 12:15:07.130000 1707383 site-packages/torch/distributed/run.py:766] *****************************************
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+[rank2]:[W725 12:15:16.408475841 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank5]:[W725 12:15:16.409341849 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank6]:[W725 12:15:16.591785753 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank4]:[W725 12:15:16.758532024 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank7]:[W725 12:15:16.094497947 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank1]:[W725 12:15:17.354054209 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank3]:[W725 12:15:17.563719546 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank8]:[W725 12:15:17.648329017 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+Activating probing in 'nested' mode (all child processes)
+[rank12]:[W725 12:15:17.180496692 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+Activating probing in 'nested' mode (all child processes)
+[rank13]:[W725 12:15:18.732168323 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank0]:[W725 12:15:18.747401802 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank11]:[W725 12:15:18.771095224 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank14]:[W725 12:15:18.056339555 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+Activating probing in 'nested' mode (all child processes)
+[rank10]:[W725 12:15:19.466155267 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+Activating probing in 'nested' mode (all child processes)
+[rank15]:[W725 12:15:19.743998815 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+[rank9]:[W725 12:15:19.920134156 compiler_depend.ts:338] Warning: Cannot create tensor with interal format while allow_internel_format=False, tensor will be created with base format. (function operator())
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+Activating probing in 'nested' mode (all child processes)
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+/root/miniconda3/envs/llm_test/lib/python3.10/site-packages/torch/distributed/distributed_c10d.py:4631: UserWarning: No device id is provided via `init_process_group` or `barrier `. Using the current device set by the user. 
+  warnings.warn(  # warn only once
+INLINE_2C_COMPILE every=1 base_n=1024 fallback_s=0.25 win=[100,300) victim_local=7
+[rank7]:W0725 12:15:42.842000 1707948 site-packages/torch/_inductor/debug.py:454] [0/0] model__1_inference_3 debug trace: /MindSpeed-LLM/MindSpeed-LLM/torch_compile_debug/run_2026_07_25_12_15_42_786661-pid_1707948/torchinductor/model__1_inference_3.0
+INLINE_2C_SPIKE_OK n=1024
+[rank7]:W0725 12:15:43.121000 1707948 site-packages/torch/_inductor/debug.py:454] [0/1] model__2_inference_4 debug trace: /MindSpeed-LLM/MindSpeed-LLM/torch_compile_debug/run_2026_07_25_12_15_42_786661-pid_1707948/torchinductor/model__2_inference_4.1
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+INLINE_2C_SPIKE_OK n=1280
+INLINE_2C_SPIKE_OK n=1408
+INLINE_2C_SPIKE_OK n=1536
+INLINE_2C_SPIKE_OK n=1664
+INLINE_2C_SPIKE_OK n=1792
+INLINE_2C_SPIKE_OK n=1920
+INLINE_2C_SPIKE_OK n=2048
+INLINE_2C_SPIKE_OK n=1024
+INLINE_2C_SPIKE_OK n=1152
+DONE world=16 out=/data/yinjinrun.p-huawei/results/ascend-ais/20260725_121105-yjr-as-c-p1-sw-c-loud/P1-SW-C/by_pod/yysong-master-0/round_1/C2_probing/ranks/rank_0000.jsonl

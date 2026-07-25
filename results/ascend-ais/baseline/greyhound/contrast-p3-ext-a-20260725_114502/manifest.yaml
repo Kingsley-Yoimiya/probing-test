@@ -1,0 +1,23 @@
+case_id: P3-EXT-A
+dose: loud
+phase: contrast_fairness_rerun
+run_id: contrast-p3-ext-a-20260725_114502
+case_ref: 20260724_231918-yjr-as-c-p3exta-loud
+world_size: 16
+pod: yysong-worker-1
+pool: pool-gh
+mode: host_bound
+inject_kind: stress_cpu
+inject_args: "cpu_load=90"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+iters: 500
+warmup: 50
+tool: Greyhound
+label_prefix: yjr-as-b-gh
+preload: /data/yinjinrun.p-huawei/opt/rbeast-fix/libbuiltin_readcyclecounter.so:/data/yinjinrun.p-huawei/probe-bundle/greyhound/libhcclprobe.so
+redis: 127.0.0.1:16379
+fairness: collect_seq_real_per_rank + C0_fp_control
+script: probe-bundle/greyhound/contrast_scripts/s4_p3exta_contrast.sh
+old_s4_kept: yjr-as-b-gh-s4-20260725_002805

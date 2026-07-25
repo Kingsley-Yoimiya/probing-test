@@ -1,0 +1,21 @@
+case_id: P2-SW-C
+dose: loud
+phase: contrast
+run_id: contrast-p2-sw-c-20260725_132235
+case_ref: 20260725_124102-yjr-as-c-p2-sw-c-loud
+world_size: 16
+pod: yysong-worker-2
+pool: pool-xpu
+mode: gpu_bound
+inject_kind: topo_5c
+inject_args: "device_rev=1,topo_extra_ar=512,topo_ar_elems=262144"
+inject_window_measure: [100, 300]
+host_bound_matmul: 768
+seed: 42
+iters: 500
+warmup: 50
+tool: XPUTimer
+label_prefix: yjr-as-b-xpu
+script: platform/ascend/xputimer/contrast_p2swc.sh
+accept_min_ratio: 1.15
+dose_note: "主证 comm_ms（金标 C1/C0_comm≈49.86）；step≈5.06 旁证；dose_check 优先 comm"

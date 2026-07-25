@@ -1,0 +1,9 @@
+show_tables|ok
+torch_trace_tail|error=query_rc_1
+gpu_util|ok
+cpu_util|ok
+process_gpu_users|error=query_rc_1
+process_cpu_stats|error=query_rc_1
+cpu_tasks|ok
+p1_gpu_window|ok
+p1_process_envs|error=query_rc_1

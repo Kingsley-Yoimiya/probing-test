@@ -1,0 +1,23 @@
+case_id: P3-EXT-B
+dose: loud
+phase: contrast
+run_id: contrast-p3-ext-b-20260725_120235
+case_ref: 20260725_020212-yjr-as-c-p3-ext-b-loud
+world_size: 16
+pod: yysong-worker-2
+pool: pool-xpu
+mode: host_bound
+inject_kind: stress_io
+inject_args: "fio_nj=16,iodepth=64,bs=4k,size=4G,ckpt_every=20,io_read_kb=1024"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+io_stress_dir: /data/yinjinrun.p-huawei/probe-bundle/io_stress
+ckpt_dir: /data/yinjinrun.p-huawei/probe-bundle/io_stress/ckpt
+seed: 42
+iters: 500
+warmup: 50
+tool: XPUTimer
+label_prefix: yjr-as-b-xpu
+script: platform/ascend/xputimer/contrast_p3extb.sh
+accept_min_ratio: 1.3

@@ -1,0 +1,3 @@
+INLINE_CUBE_ALLOC size=8192 mm/step=64 victim_local=7
+SIDECAR_START kind=inline_cube size=8192 mm=64 victim=7
+SIDECAR_STOP

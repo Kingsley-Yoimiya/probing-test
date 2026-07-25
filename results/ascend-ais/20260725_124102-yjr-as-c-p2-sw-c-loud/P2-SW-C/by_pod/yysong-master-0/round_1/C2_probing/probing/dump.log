@@ -1,0 +1,3 @@
+dump_probing_sql case=P2-SW-C out=/data/yinjinrun.p-huawei/results/ascend-ais/20260725_124102-yjr-as-c-p2-sw-c-loud/P2-SW-C/by_pod/yysong-master-0/round_1/C2_probing/probing pid=2101729 attach=ok ts=2026-07-25T12:50:20+08:00
+WARN: mx-smi not found
+WARN: host_gpu collect failed

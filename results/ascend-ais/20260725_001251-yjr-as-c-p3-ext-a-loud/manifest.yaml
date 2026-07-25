@@ -1,0 +1,34 @@
+case_id: P3-EXT-A
+dose: loud
+phase: pilot
+run_id: 20260725_001251-yjr-as-c-p3-ext-a-loud
+world_size: 16
+nnodes: 1
+nproc: 16
+pod: yysong-master-0
+pool: pool-case
+hold_job: yysong
+mode: host_bound
+inject_kind: stress_cpu
+inject_args: "cpu_load=90"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+seed: 42
+iters: 500
+warmup: 50
+model: gpt2
+seq: 1024
+batch: 8
+abc_configs: C2_probing
+tools: [C0, C1, C2]
+afs_pod_out: /data/yinjinrun.p-huawei/results/ascend-ais/20260725_001251-yjr-as-c-p3-ext-a-loud
+label_prefix: yjr-as-c
+merged_from_loud: 20260724_231918-yjr-as-c-p3exta-loud
+merged_configs: [C0_baseline, C1_inject_none]
+c2_run: true
+probing_sql_dump: failed_path_bash_missing
+merged_from_loud: 20260724_231918-yjr-as-c-p3exta-loud
+merged_configs: [C0_baseline, C1_inject_none]
+c2_run: true
+probing_sql_dump: failed_path_bash_missing

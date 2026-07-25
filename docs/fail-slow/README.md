@@ -1,8 +1,13 @@
 # Fail-Slow × Probing 实验（文档真相源）
 
-> **自 2026-07-24 起**：本目录为 Fail-Slow 实验文档的**唯一维护点**。  
-> Agent 运行时核心三份：`rules.md` + `ledger.md` + 论文侧 `OUTLINE`（见 myportal agent pack）。  
-> 编排脚本：[`../../scripts/fail-slow/`](../../scripts/fail-slow/)。
+> **沐曦（MetaX）**：本目录为 Fail-Slow 文档维护点。  
+> Agent 运行时核心三份：`rules.md` + `ledger.md` + 论文侧 `OUTLINE`。  
+> 编排脚本：[`../../scripts/fail-slow/`](../../scripts/fail-slow/)。  
+>
+> **华为昇腾**：规则/台账在 [`probing-huawei/docs/fail-slow/`](https://github.com/Kingsley-Yoimiya/probing-huawei/tree/main/docs/fail-slow)；  
+> **对外终态包**在本仓 [`results/ascend-ais/`](../../results/ascend-ais/)（14 SCORED + 对照瘦身 VERDICT）。  
+> **不要**把昇腾 run 写进本目录沐曦台账或 `results/muxi-h3c/`；**不要**把给人看的终态只放 myportal。  
+> 共享编排 + `platform/ascend/` 仍在本仓 `scripts/fail-slow/`。
 
 ## 文档索引（仅保留这些）
 
@@ -24,8 +29,9 @@
 | 规则 / 台账 | **本仓** `docs/fail-slow/` |
 | 编排 / 注入 / 判分 | **本仓** `scripts/fail-slow/` |
 | 身份 / kube / vault | myportal `config/`（各自配置） |
-| 结果备份 | myportal `results/<node>/<run_id>/` |
-| 冻结战役 raw | `reports/fail-slow-mohe/20260724-first-tier-loud-d4/` |
+| 结果备份（维护者本机） | 各机 `results/<node>/<run_id>/`；昇腾编排默认可在 probing-huawei |
+| **昇腾对外终态** | **本仓** [`results/ascend-ais/`](../../results/ascend-ais/) |
+| 冻结战役 raw（沐曦） | `reports/fail-slow-mohe/20260724-first-tier-loud-d4/` |
 
 ## 成功锚点（Loud，2026-07-24）
 

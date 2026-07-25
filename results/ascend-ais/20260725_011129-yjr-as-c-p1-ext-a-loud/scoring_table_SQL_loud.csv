@@ -1,0 +1,2 @@
+run_id,dose,case,d_level,c1_c0,target_reported,target_truth,grid_reported,grid_truth,tool_probing_sql,tool_greyhound,tool_xputimer,notes
+20260725_011129-yjr-as-c-p1-ext-a-loud,loud,P1-EXT-A,D2,3.87,rank_4,rank_7,,P1-EXT,DUMP_OK,PENDING,PENDING,"D1: C1/C0_step_ms=3.87; D2: IoU=1.00 det=[100,300] gt=[100,300] onset=101; D3_signal=min_wait_among_slow rank=4 wait=0.88 slow_n=0 step=300.2; D3_fail: reported=4 truth=7; sql_dump=ok; tables_missing=python.torch_trace,process.gpu_users,process.cpu_stats; D4_skipped: offline_d_level=D2"

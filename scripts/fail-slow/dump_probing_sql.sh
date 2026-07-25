@@ -221,7 +221,8 @@ has_sidecar = bool(re.search(r"sidecar_inject", proc, re.I))
 
 util_thr = float("${HOST_GPU_UTIL_THRESH:-50}")
 hbm_thr = float("${HOST_HBM_BW_THRESH_MBS:-500}")  # idle≈1；内联 HBM Loud 应远高于此
-if case == "P1-EXT-B":
+# P1-EXT-B / P1-HW-B：同窗 HBM 带宽（inline D2D / ramp）为主证
+if case in ("P1-EXT-B", "P1-HW-B"):
     hit = hbm_bw is not None and hbm_bw >= hbm_thr
     evidence = "host_mx_smi_hbm_bw" if hit else "host_mx_smi_hbm_no_hit"
 elif case.startswith("P1-EXT"):

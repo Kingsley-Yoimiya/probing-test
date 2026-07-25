@@ -1,0 +1,88 @@
+{
+  "case_id": "P2-SW-C",
+  "tool": "xputimer",
+  "dose": "loud",
+  "case_ref": "20260725_124102-yjr-as-c-p2-sw-c-loud",
+  "metric_name": "HcclAllReduce",
+  "median_c0": 113.0,
+  "median_c1": 67.0,
+  "coll_ratio": 0.5929203539823009,
+  "cross_run_contrast_pass": false,
+  "detect_mode": "cross_run_contrast",
+  "autonomous_flag": false,
+  "autonomous_detect": false,
+  "hang_flags": {
+    "c0": 0,
+    "c1": 0
+  },
+  "slow_flags": {
+    "c0": 0,
+    "c1": 0
+  },
+  "coll_events": {
+    "c0": 81401,
+    "c1": 4587001
+  },
+  "noise_diag_slow_ge_1p5xc0": {
+    "c0": 3139,
+    "c1": 27753
+  },
+  "dose_check": {
+    "primary": "comm_ms",
+    "comm_ms_median_c0": 6.306,
+    "comm_ms_median_c1": 87.716,
+    "comm_ms_ratio": 13.909927053599745,
+    "step_ms_median_c0": 75.85849999999999,
+    "step_ms_median_c1": 160.7645,
+    "step_ms_ratio": 2.119268111022496,
+    "pass": true,
+    "n_c0": 3200,
+    "n_c1": 3200,
+    "window": [
+      100,
+      300
+    ],
+    "note": "P2-SW-C 主证 comm_ms；金标 C1/C0_comm≈49.86；step≈5.06 旁证不单独 FAIL"
+  },
+  "accept_min_ratio": 1.15,
+  "detect_ok": false,
+  "dose_check_step_only": {
+    "step_ms_median_c0": 75.85849999999999,
+    "step_ms_median_c1": 160.7645,
+    "step_ms_ratio": 2.119268111022496,
+    "pass": true,
+    "n_c0": 3200,
+    "n_c1": 3200,
+    "window": [
+      100,
+      300
+    ]
+  },
+  "dose_check_comm": {
+    "primary": "comm_ms",
+    "comm_ms_median_c0": 6.306,
+    "comm_ms_median_c1": 87.716,
+    "comm_ms_ratio": 13.909927053599745,
+    "comm_ms_pass": true,
+    "step_ms_median_c0": 75.85849999999999,
+    "step_ms_median_c1": 160.7645,
+    "step_ms_ratio": 2.119268111022496,
+    "step_ms_pass": true,
+    "pass": true,
+    "preferred": "comm_ms",
+    "n_comm_c0": 3200,
+    "n_comm_c1": 3200,
+    "window": [
+      100,
+      300
+    ],
+    "note": "P2-SW-C 主证 comm_ms；金标 C1/C0_comm≈49.86；step≈5.06 旁证不单独 FAIL",
+    "accept_min_ratio": 1.15
+  },
+  "dose_check_combined": {
+    "comm_pass": true,
+    "step_pass": true,
+    "pass": true,
+    "preferred": "comm_ms"
+  }
+}

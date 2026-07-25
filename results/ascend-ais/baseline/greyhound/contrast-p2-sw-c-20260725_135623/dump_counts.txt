@@ -1,0 +1,5 @@
+     70416 /data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/contrast-p2-sw-c-20260725_135623/C0_baseline/greyhound/hcclprobe.collect.jsonl
+   4576016 /data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/contrast-p2-sw-c-20260725_135623/C1_inject_none/greyhound/hcclprobe.collect.jsonl
+   4646432 total
+16
+16

@@ -1,0 +1,3 @@
+SQL: SELECT * FROM process.gpu_users LIMIT 20
+----
+error=no_probing_attach

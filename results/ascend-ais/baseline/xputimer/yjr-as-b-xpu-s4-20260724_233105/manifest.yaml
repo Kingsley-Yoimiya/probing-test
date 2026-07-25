@@ -1,0 +1,18 @@
+case_id: P3-EXT-A
+dose: loud
+phase: s4_contrast
+run_id: yjr-as-b-xpu-s4-20260724_233105
+case_ref: 20260724_231918-yjr-as-c-p3exta-loud
+world_size: 16
+pod: yysong-worker-2
+pool: pool-xpu
+mode: host_bound
+inject_kind: stress_cpu
+inject_args: "cpu_load=90"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+iters: 500
+warmup: 50
+tool: XPUTimer
+label_prefix: yjr-as-b-xpu

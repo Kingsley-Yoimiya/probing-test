@@ -1,0 +1,3 @@
+SQL: SELECT ts, scope, cpu_total_pct, rss_kb, thread_count, comm FROM cpu.utilization ORDER BY ts DESC LIMIT 100
+----
+error=no_probing_attach

@@ -1,0 +1,10 @@
+cpu_some_rate_us_s=None
+io_some_rate_us_s=None
+memory_some_rate_us_s=None
+cpu_some_avg10_t1=None
+threshold_cpu=200000.0
+threshold_io=50000.0
+threshold_mem=50000.0
+threshold=50000.0
+hit=False
+evidence=host_psi_io_no_hit

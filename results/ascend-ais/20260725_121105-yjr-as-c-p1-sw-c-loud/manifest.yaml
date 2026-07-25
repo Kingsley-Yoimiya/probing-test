@@ -1,0 +1,26 @@
+case_id: P1-SW-C
+dose: loud
+phase: pilot
+run_id: 20260725_121105-yjr-as-c-p1-sw-c-loud
+world_size: 16
+nnodes: 1
+nproc: 16
+pod: yysong-master-0
+pool: pool-case
+hold_job: yysong
+mode: gpu_bound
+inject_kind: 2c
+inject_args: "n=1024,every=1,fallback_s=0.25"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+seed: 42
+iters: 500
+warmup: 50
+model: gpt2
+seq: 1024
+batch: 8
+abc_configs: C0_baseline,C1_inject_none,C2_probing
+tools: [C0, C1, C2]
+afs_pod_out: /data/yinjinrun.p-huawei/results/ascend-ais/20260725_121105-yjr-as-c-p1-sw-c-loud
+label_prefix: yjr-as-c

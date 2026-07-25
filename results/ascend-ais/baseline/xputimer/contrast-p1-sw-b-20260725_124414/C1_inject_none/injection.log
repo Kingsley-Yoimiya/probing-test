@@ -1,0 +1,2 @@
+INLINE_RARE_SHAPE seq=1536 every=1 frac=None win=[100,300) victim_local=7
+SIDECAR_START kind=inline_2b rare_seq=1536 every=1 victim=7

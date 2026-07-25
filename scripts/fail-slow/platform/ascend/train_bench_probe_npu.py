@@ -102,11 +102,19 @@ def main() -> None:
             x = x + self.fc2(F.gelu(self.fc1(h)))
             return x
 
+    # rare-shape：pos 表按 max(base_seq, RARE_SHAPE_SEQ) 分配，避免窗内拉长 seq 越界
+    _inline_early = os.environ.get("INLINE_INJECT", "").strip()
+    if _inline_early in ("2b", "rare_shape"):
+        _rare_pos = max(1, int(os.environ.get("RARE_SHAPE_SEQ", "1536")))
+        pos_max = max(args.seq, _rare_pos)
+    else:
+        pos_max = args.seq
+
     class GPT2Bench(nn.Module):
         def __init__(self):
             super().__init__()
             self.emb = nn.Embedding(vocab, hidden)
-            self.pos = nn.Embedding(args.seq, hidden)
+            self.pos = nn.Embedding(pos_max, hidden)
             self.blocks = nn.ModuleList([Block(hidden, ffn) for _ in range(layers)])
             self.ln = nn.LayerNorm(hidden)
             self.head = nn.Linear(hidden, vocab, bias=False)
@@ -192,19 +200,42 @@ def main() -> None:
     def step_instrumented(
         force_gc: bool = False,
         gc_stall_s: float = 0.0,
+        data_stall_s: float = 0.0,
         hbm_bufs=None,
         hbm_copies: int = 0,
         cube_bufs=None,
         cube_mm: int = 0,
+        frag_action=None,
+        seq_override: int | None = None,
+        compile_spike_n: int = 0,
     ):
         t0 = time.perf_counter()
+        frag_stall_ms = 0.0
         if force_gc:
             import gc as _gc_mod
 
             _gc_mod.collect()
             if gc_stall_s > 0:
                 time.sleep(gc_stall_s)
+        # P3-SW-B：dataloader 阻塞必须落在计时区内，否则 accept(rank0 step_ms) 咬空
+        if data_stall_s > 0:
+            time.sleep(data_stall_s)
         idx = get_batch()
+        # P1-SW-B：victim 窗内改用罕见 seq（pad/truncate）；非 victim / 窗外保持 base --seq
+        if seq_override is not None and int(seq_override) != int(idx.shape[1]):
+            tgt = int(seq_override)
+            if idx.shape[1] > tgt:
+                idx = idx[:, :tgt]
+            else:
+                pad = torch.randint(
+                    0,
+                    vocab,
+                    (idx.shape[0], tgt - idx.shape[1]),
+                    device=idx.device,
+                    dtype=idx.dtype,
+                )
+                idx = torch.cat([idx, pad], dim=1)
+        shape_seq = int(idx.shape[1])
         t_data = time.perf_counter()
 
         if hbm_bufs is not None and hbm_copies > 0:
@@ -221,6 +252,69 @@ def main() -> None:
                 torch.mm(ca, cb)
             torch.npu.synchronize()
 
+        # P1-SW-C / 2c：清 inductor 缓存 + 未见 shape 的 torch.compile one-shot（计时区内）
+        # Ascend 上 compile 常失败；失败则 sleep 近似尖刺，保证 Loud 可咬。
+        if compile_spike_n > 0:
+            import shutil as _shutil
+
+            _cache = os.environ.get(
+                "TORCHINDUCTOR_CACHE_DIR",
+                "/tmp/p1swc_inductor_cache",
+            )
+            try:
+                if os.path.isdir(_cache):
+                    _shutil.rmtree(_cache, ignore_errors=True)
+                os.makedirs(_cache, exist_ok=True)
+                os.environ["TORCHINDUCTOR_CACHE_DIR"] = _cache
+                _n = int(compile_spike_n)
+
+                def _spike_mm(a, b):
+                    return a @ b
+
+                _spike = torch.compile(_spike_mm)
+                _a = torch.randn(_n, _n, device=device, dtype=torch.bfloat16)
+                _b = torch.randn(_n, _n, device=device, dtype=torch.bfloat16)
+                _c = _spike(_a, _b)
+                torch.npu.synchronize()
+                del _a, _b, _c, _spike
+                print(f"INLINE_2C_SPIKE_OK n={_n}", flush=True)
+            except Exception as exc:  # noqa: BLE001
+                stall = float(os.environ.get("INLINE_2C_FALLBACK_S", "0.25"))
+                print(f"INLINE_2C_FALLBACK sleep={stall}s err={exc}", flush=True)
+                time.sleep(stall)
+
+        # P1-SW-A：碎片累积 + 骤停须在 barrier 前，才能拖全局 step_ms
+        if frag_action is not None:
+            t_f0 = time.perf_counter()
+            live = frag_action.get("live")
+            sizes = frag_action.get("sizes") or []
+            n_chunks = int(frag_action.get("chunks", 0))
+            stall_mb = int(frag_action.get("stall_mb", 0))
+            do_stall = bool(frag_action.get("do_stall", False))
+            min_stall_s = float(frag_action.get("min_stall_s", 0.0))
+            step_i = int(frag_action.get("step", 0))
+            if live is not None and n_chunks > 0 and sizes:
+                for k in range(n_chunks):
+                    sz = sizes[(step_i + k) % len(sizes)]
+                    live.append(torch.empty(sz, device=device, dtype=torch.float16))
+                if len(live) >= 4:
+                    for j in range(0, len(live), 2):
+                        live[j] = None  # type: ignore[assignment]
+                    live[:] = [t for t in live if t is not None]
+            if do_stall and stall_mb > 0:
+                ne = stall_mb * 1024 * 1024 // 2
+                try:
+                    big = torch.empty(ne, device=device, dtype=torch.float16)
+                    big.fill_(1)
+                    torch.npu.synchronize()
+                    del big
+                except Exception as exc:  # noqa: BLE001
+                    print(f"INLINE_2A_STALL_ALLOC_FAIL: {exc}", flush=True)
+                elapsed = time.perf_counter() - t_f0
+                if min_stall_s > elapsed:
+                    time.sleep(min_stall_s - elapsed)
+            frag_stall_ms = (time.perf_counter() - t_f0) * 1e3
+
         opt.zero_grad(set_to_none=True)
         if decompose:
             e_c0.record()
@@ -235,9 +329,32 @@ def main() -> None:
             t_bar = time.perf_counter()
             e_m0.record()
 
+        # DDP AllReduce 发生在 opt.step() 内；e_m1 必须在 step 之后
+        opt.step()
+        # P2-SW-B：可选大 AllReduce 负载（C0/C1/C2 同开），使 HCCL_ALGO 钳制可测
+        stress_mb = int(os.environ.get("HCCL_STRESS_MB", os.environ.get("MCCL_STRESS_MB", "0")) or "0")
+        if stress_mb > 0:
+            nelem = max(1, stress_mb * 1024 * 1024 // 4)
+            if not hasattr(step_instrumented, "_stress_buf"):
+                step_instrumented._stress_buf = torch.randn(
+                    nelem, device=device, dtype=torch.float32
+                )
+            dist.all_reduce(step_instrumented._stress_buf)
+        # P2-SW-C：拓扑漂移辅剂量 —— 额外 AllReduce 模拟绕远路（落在 comm 窗，主证可走 comm_ms）
+        extra_ar = int(os.environ.get("TOPO_EXTRA_AR", "0") or "0")
+        if extra_ar > 0:
+            ar_elems = max(1024, int(os.environ.get("TOPO_AR_ELEMS", "1024") or "1024"))
+            if (
+                not hasattr(step_instrumented, "_topo_ar_buf")
+                or step_instrumented._topo_ar_buf.numel() != ar_elems
+            ):
+                step_instrumented._topo_ar_buf = torch.ones(
+                    ar_elems, device=device, dtype=torch.float32
+                )
+            for _ in range(extra_ar):
+                dist.all_reduce(step_instrumented._topo_ar_buf)
         if decompose:
             e_m1.record()
-        opt.step()
         torch.npu.synchronize()
         t1 = time.perf_counter()
 
@@ -250,10 +367,19 @@ def main() -> None:
             compute_ms = comm_ms = wait_ms = 0.0
             data_ms = (t_data - t0) * 1e3
         step_ms = (t1 - t0) * 1e3
-        return data_ms, compute_ms, comm_ms, wait_ms, step_ms, float(loss.detach().cpu())
+        return (
+            data_ms,
+            compute_ms,
+            comm_ms,
+            wait_ms,
+            step_ms,
+            float(loss.detach().cpu()),
+            frag_stall_ms,
+            shape_seq,
+        )
 
     for _ in range(args.warmup):
-        step_instrumented()
+        step_instrumented()  # ignore frag_stall / shape_seq
     dist.barrier()
 
     out_dir = Path(args.out_dir)
@@ -286,12 +412,50 @@ def main() -> None:
     inline_gc_every = max(1, int(os.environ.get("INLINE_GC_EVERY", "1")))
     inline_gc_stall_s = float(os.environ.get("INLINE_GC_STALL_S", "0.25"))
     do_inline_8a = inline == "8a" and local == inline_victim and node_rank == 0
-    do_inline_hbm = inline == "hbm" and local == inline_victim and node_rank == 0
+    # P3-SW-B：进程内渐进泄漏（外挂 sidecar 在大内存机上咬空）→ leak MB + data_stall
+    do_inline_8b = inline == "8b" and local == inline_victim and node_rank == 0
+    inline_8b_mb = max(4, int(os.environ.get("INLINE_8B_MB", "16")))
+    inline_8b_stall_s = float(os.environ.get("INLINE_8B_STALL_S", "0.25"))
+    # P1-EXT-B：固定 copies；P1-HW-B：INLINE_HBM_RAMP=1 或 inline=hbm_ramp → copies 线性升到 MAX
+    do_inline_hbm = (
+        inline in ("hbm", "hbm_ramp", "1b")
+        and local == inline_victim
+        and node_rank == 0
+    )
+    hbm_ramp = bool(
+        inline in ("hbm_ramp", "1b")
+        or os.environ.get("INLINE_HBM_RAMP", "0").strip() in ("1", "true", "yes")
+    )
     do_inline_cube = inline == "cube" and local == inline_victim and node_rank == 0
+    do_inline_2a = inline == "2a" and local == inline_victim and node_rank == 0
+    # P1-SW-B：罕见 shape（OUTLINE 2B）；仅 victim 在窗内改 seq
+    do_inline_2b = (
+        inline in ("2b", "rare_shape")
+        and local == inline_victim
+        and node_rank == 0
+    )
+    # P1-SW-C：首次编译尖刺（OUTLINE 2C）；仅 victim 在窗内 one-shot compile/fallback
+    do_inline_2c = (
+        inline in ("2c", "compile_spike")
+        and local == inline_victim
+        and node_rank == 0
+    )
+    rare_seq = max(1, int(os.environ.get("RARE_SHAPE_SEQ", "1536")))
+    rare_every = max(1, int(os.environ.get("RARE_SHAPE_EVERY", "1")))
+    rare_frac_raw = os.environ.get("RARE_SHAPE_FRAC", "").strip()
+    rare_frac = float(rare_frac_raw) if rare_frac_raw else None
+    compile_every = max(1, int(os.environ.get("INLINE_2C_EVERY", "1")))
+    compile_base_n = max(256, int(os.environ.get("INLINE_2C_N", "1024")))
     leak_buf: list = []
+    frag_live: list = []
+    frag_chunks_per_step = max(1, int(os.environ.get("INLINE_2A_CHUNKS", "12")))
+    frag_stall_mb = max(64, int(os.environ.get("INLINE_2A_STALL_MB", "768")))
+    frag_min_stall_s = float(os.environ.get("INLINE_2A_STALL_S", "0.25"))
+    frag_sizes = [256, 1024, 4096, 16384, 65536, 262144, 524288, 1048576]  # fp16 elems
     hbm_bufs = None
     cube_bufs = None
     hbm_copies = max(1, int(os.environ.get("INLINE_HBM_COPIES", "6")))
+    hbm_copies_max = max(hbm_copies, int(os.environ.get("INLINE_HBM_COPIES_MAX", "48")))
     cube_mm = max(1, int(os.environ.get("INLINE_CUBE_MM", "8")))
     cube_size = max(256, int(os.environ.get("INLINE_CUBE_SIZE", "4096")))
     if do_inline_hbm:
@@ -300,7 +464,11 @@ def main() -> None:
         src = torch.randn(ne, device=device, dtype=torch.float16)
         dst = torch.empty_like(src)
         hbm_bufs = (src, dst)
-        print(f"INLINE_HBM_ALLOC mb={hbm_mb} copies/step={hbm_copies}", flush=True)
+        print(
+            f"INLINE_HBM_ALLOC mb={hbm_mb} copies/step={hbm_copies} "
+            f"ramp={int(hbm_ramp)} copies_max={hbm_copies_max}",
+            flush=True,
+        )
     if do_inline_cube:
         # Loud 起点：4096×8 mm/step；咬空再抬 INLINE_CUBE_MM / SIZE
         ca = torch.randn(cube_size, cube_size, device=device, dtype=torch.float16)
@@ -313,16 +481,69 @@ def main() -> None:
             f"INLINE_CUBE_ALLOC size={cube_size} mm/step={cube_mm} victim_local={inline_victim}",
             flush=True,
         )
+    if do_inline_8b:
+        print(
+            f"INLINE_8B_LEAK mb/step={inline_8b_mb} data_stall_s={inline_8b_stall_s} "
+            f"win=[{inline_start},{inline_stop}) victim_local={inline_victim}",
+            flush=True,
+        )
+    if do_inline_2a:
+        print(
+            f"INLINE_2A_FRAG chunks/step={frag_chunks_per_step} stall_mb={frag_stall_mb} "
+            f"min_stall_s={frag_min_stall_s} win=[{inline_start},{inline_stop})",
+            flush=True,
+        )
+    if do_inline_2b:
+        print(
+            f"INLINE_RARE_SHAPE seq={rare_seq} every={rare_every} frac={rare_frac} "
+            f"win=[{inline_start},{inline_stop}) victim_local={inline_victim}",
+            flush=True,
+        )
+    if do_inline_2c:
+        print(
+            f"INLINE_2C_COMPILE every={compile_every} base_n={compile_base_n} "
+            f"fallback_s={os.environ.get('INLINE_2C_FALLBACK_S', '0.25')} "
+            f"win=[{inline_start},{inline_stop}) victim_local={inline_victim}",
+            flush=True,
+        )
     ckpt_dir = Path(os.environ.get("CKPT_DIR", "/data/yinjinrun.p-huawei/probe-bundle/ckpt"))
 
     f = out_file.open("a", buffering=1)
     try:
         for i in range(args.iters):
             in_win_8a = bool(do_inline_8a and inline_start <= i < inline_stop)
+            in_win_8b = bool(do_inline_8b and inline_start <= i < inline_stop)
             in_win_hbm = bool(do_inline_hbm and inline_start <= i < inline_stop)
             in_win_cube = bool(do_inline_cube and inline_start <= i < inline_stop)
+            in_win_2a = bool(do_inline_2a and inline_start <= i < inline_stop)
+            in_win_2b = bool(do_inline_2b and inline_start <= i < inline_stop)
+            in_win_2c = bool(do_inline_2c and inline_start <= i < inline_stop)
+            cur_hbm_copies = 0
+            if in_win_hbm:
+                if hbm_ramp:
+                    win_len = max(1, inline_stop - inline_start)
+                    frac = (i - inline_start) / float(win_len)
+                    cur_hbm_copies = max(
+                        1,
+                        int(hbm_copies + frac * (hbm_copies_max - hbm_copies)),
+                    )
+                else:
+                    cur_hbm_copies = hbm_copies
+            seq_override = None
+            if in_win_2b:
+                off = i - inline_start
+                use_rare = False
+                if rare_frac is not None:
+                    win_len = max(1, inline_stop - inline_start)
+                    use_rare = off < int(rare_frac * win_len + 1e-9)
+                else:
+                    use_rare = (off % rare_every) == 0
+                if use_rare:
+                    seq_override = rare_seq
             if in_win_8a:
                 leak_buf.append(bytearray(1024 * 4 * 1024))
+            if in_win_8b:
+                leak_buf.append(bytearray(inline_8b_mb * 1024 * 1024))
             force_gc = bool(
                 do_inline_8a
                 and (
@@ -330,14 +551,50 @@ def main() -> None:
                     or ((i + 1) == inline_stop)
                 )
             )
-            data_ms, compute_ms, comm_ms, wait_ms, step_ms, loss = step_instrumented(
+            frag_action = None
+            if in_win_2a:
+                do_stall = (i - inline_start) >= max(10, (inline_stop - inline_start) // 3)
+                frag_action = {
+                    "live": frag_live,
+                    "sizes": frag_sizes,
+                    "chunks": frag_chunks_per_step,
+                    "stall_mb": frag_stall_mb,
+                    "do_stall": do_stall,
+                    "min_stall_s": (frag_min_stall_s if do_stall else 0.0),
+                    "step": i,
+                }
+            spike_n = 0
+            if in_win_2c and ((i - inline_start) % compile_every) == 0:
+                # 每步换 shape，逼 inductor 重新编译（one-shot 尖刺的 Loud 近似）
+                spike_n = compile_base_n + ((i - inline_start) % 9) * 128
+            (
+                data_ms,
+                compute_ms,
+                comm_ms,
+                wait_ms,
+                step_ms,
+                loss,
+                frag_stall_ms,
+                shape_seq,
+            ) = step_instrumented(
                 force_gc=force_gc,
                 gc_stall_s=(inline_gc_stall_s if force_gc else 0.0),
+                data_stall_s=(inline_8b_stall_s if in_win_8b else 0.0),
                 hbm_bufs=(hbm_bufs if in_win_hbm else None),
-                hbm_copies=(hbm_copies if in_win_hbm else 0),
+                hbm_copies=cur_hbm_copies,
                 cube_bufs=(cube_bufs if in_win_cube else None),
                 cube_mm=(cube_mm if in_win_cube else 0),
+                frag_action=frag_action,
+                seq_override=seq_override,
+                compile_spike_n=spike_n,
             )
+            mem_alloc = mem_reserved = mem_gap = 0
+            try:
+                mem_alloc = int(torch.npu.memory_allocated(device))
+                mem_reserved = int(torch.npu.memory_reserved(device))
+                mem_gap = mem_reserved - mem_alloc
+            except Exception:  # noqa: BLE001
+                pass
             rec = {
                 "step": i,
                 "data_ms": round(data_ms, 3),
@@ -347,6 +604,11 @@ def main() -> None:
                 "step_ms": round(step_ms, 3),
                 "loss": round(loss, 6),
                 "ts": round(time.time(), 3),
+                "npu_alloc_bytes": mem_alloc,
+                "npu_reserved_bytes": mem_reserved,
+                "cuda_frag_gap_bytes": mem_gap,
+                "frag_stall_ms": round(frag_stall_ms, 3),
+                "shape_seq": shape_seq,
                 **meta_common,
             }
             f.write(json.dumps(rec) + "\n")

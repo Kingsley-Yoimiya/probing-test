@@ -24,6 +24,6 @@ cases:
     outline: 8C
     inject_kind: "8c"   # 监控进程泄漏（线程 + 1MB/3s）
     mode: host_bound
-    loud:   { args: "", accept_min_ratio: 1.3, note: "需 host_bound；调泄漏速率使 C1/C0 可测" }
+    loud:   { args: "", accept_min_ratio: 1.3, note: "a3 PASS C1/C0=2.853 @8c_loud3 workers=128 1MB/1s; freeze for c2" }
     quiet:  { args: "", accept_min_ratio: 1.15 }
     masked: { args: "", accept_min_ratio: 1.05 }

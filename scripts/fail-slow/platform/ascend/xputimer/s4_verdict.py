@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""S4 verdict: compare XPUTimer coll host-wall C0 vs C1 under P3-EXT-A Loud dose.
+"""XPUTimer contrast verdict: split autonomous prom flags vs cross-run median ratio.
 
-Autonomous rule (no INJECT_STALL / no fixed SLOW us):
+Autonomous (no external baseline needed):
+  XPUTimer's own ascend_metrics.*.prom hang_flags / slow_flags on C1.
+
+Cross-run (needs healthy C0 baseline; NOT autonomous):
   ratio = median(C1 dur_us) / median(C0 dur_us) for HcclAllReduce (fallback AllGather)
-  PASS if ratio >= accept_min_ratio (default 1.3, same Loud bite as Case).
+  PASS if ratio >= accept_min_ratio.
 
-Also counts events with dur_us >= 1.5 * C0_median as rule-SLOW.
+Never label detect_mode=autonomous when only the cross-run ratio fires.
 """
 from __future__ import annotations
 
@@ -39,11 +42,11 @@ def med(xs: list[float]) -> float:
 
 
 def load_flag_totals(dump_dir: str) -> tuple[int, int, int]:
-    """从 XPUTimer 自己的 .prom 汇总它**自主**报的 hang/slow flags 与事件数。
+    """Sum XPUTimer's own hang/slow flags + coll events across .prom files.
 
-    这些是 XPUTimer 论文里真正的自主检出信号（hang poller + SLOW 阈值），跨所有
-    rank 的 .prom 求和。与「跨-run 中位比」不同——后者要外部健康基线才成立。
-    返回 (hang_flags, slow_flags, coll_events)。
+    These are the tool's autonomous detect signals (hang poller + SLOW threshold).
+    Distinct from cross-run median ratio which needs an external healthy C0.
+    Returns (hang_flags, slow_flags, coll_events).
     """
     hang = slow = events = 0
     for p in sorted(glob.glob(os.path.join(dump_dir, "ascend_metrics.*.prom"))):
@@ -70,12 +73,58 @@ def load_flag_totals(dump_dir: str) -> tuple[int, int, int]:
     return hang, slow, events
 
 
+def load_step_ms_window(
+    ranks_dir: str, start: int = 100, stop: int = 300
+) -> list[float]:
+    """Collect step_ms in measure window from rank_*.jsonl (dose_check only)."""
+    out: list[float] = []
+    if not ranks_dir or not os.path.isdir(ranks_dir):
+        return out
+    for p in sorted(glob.glob(os.path.join(ranks_dir, "rank_*.jsonl"))):
+        with open(p, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    o = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                step = o.get("step")
+                if step is None:
+                    step = o.get("global_step")
+                if step is None:
+                    continue
+                try:
+                    s = int(step)
+                except (TypeError, ValueError):
+                    continue
+                if start <= s < stop and "step_ms" in o:
+                    try:
+                        out.append(float(o["step_ms"]))
+                    except (TypeError, ValueError):
+                        pass
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--c0", required=True)
-    ap.add_argument("--c1", required=True)
+    ap.add_argument("--c0", required=True, help="C0 xputimer dump dir")
+    ap.add_argument("--c1", required=True, help="C1 xputimer dump dir")
+    ap.add_argument("--ranks-c0", default="", help="C0 ranks/ for step_ms dose_check")
+    ap.add_argument("--ranks-c1", default="", help="C1 ranks/ for step_ms dose_check")
+    ap.add_argument("--case-id", default="P3-EXT-A")
+    ap.add_argument("--case-ref", default="")
+    ap.add_argument("--dose-desc", default="")
     ap.add_argument("--accept-min-ratio", type=float, default=1.3)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--window-start", type=int, default=100)
+    ap.add_argument("--window-stop", type=int, default=300)
+    ap.add_argument("--out", required=True, help="VERDICT markdown path")
+    ap.add_argument(
+        "--summary",
+        default="",
+        help="SUMMARY json path (default: sibling CONTRAST_SUMMARY.json or S4_SUMMARY.json)",
+    )
     args = ap.parse_args()
 
     name = "HcclAllReduce"
@@ -91,37 +140,61 @@ def main() -> int:
     thr = 1.5 * m0 if m0 == m0 else float("nan")
     slow_c0 = sum(1 for x in c0 if x >= thr) if thr == thr else 0
     slow_c1 = sum(1 for x in c1 if x >= thr) if thr == thr else 0
-    # 跨-run 对照：C1/C0 中位比。这**不是** XPUTimer 自主检出——需外部健康基线 C0。
+    # Cross-run: C1/C0 median. NOT XPUTimer autonomous — needs external healthy C0.
     contrast_ok = ratio == ratio and ratio >= args.accept_min_ratio
 
-    # XPUTimer **自主**信号：它自己 .prom 里的 hang/slow flags（无需外部基线）
+    # XPUTimer autonomous: its own .prom hang/slow flags (no external baseline)
     hang0, slow0, ev0 = load_flag_totals(args.c0)
     hang1, slow1, ev1 = load_flag_totals(args.c1)
-    autonomous_flag = (hang1 + slow1) > 0  # C1 上 XPUTimer 自己报了 hang/slow 才算自主检出
+    autonomous_flag = (hang1 + slow1) > 0
+
+    # detect_mode: never call it "autonomous" when only cross-run fires
+    if autonomous_flag and contrast_ok:
+        detect_mode = "autonomous+cross_run"
+    elif autonomous_flag:
+        detect_mode = "autonomous"
+    else:
+        detect_mode = "cross_run_contrast"
+
+    # dose_check via step_ms (not XPUTimer detect rule)
+    sm0 = load_step_ms_window(args.ranks_c0, args.window_start, args.window_stop)
+    sm1 = load_step_ms_window(args.ranks_c1, args.window_start, args.window_stop)
+    med_sm0, med_sm1 = med(sm0), med(sm1)
+    step_ratio = (
+        (med_sm1 / med_sm0)
+        if med_sm0 and med_sm0 == med_sm0 and med_sm0 > 0
+        else float("nan")
+    )
+    dose_ok = step_ratio == step_ratio and step_ratio >= args.accept_min_ratio
+
+    case_ref = args.case_ref or "(unset)"
+    dose_desc = args.dose_desc or "(see manifest)"
+    detect_ok = bool(autonomous_flag or contrast_ok)
 
     lines = [
-        "# XPUTimer S4 · P3-EXT-A Loud contrast",
+        f"# XPUTimer contrast · {args.case_id} Loud",
         "",
-        f"- case_ref: `20260724_231918-yjr-as-c-p3exta-loud` (C1/C0 step_ms=1.97)",
-        f"- dose: stress-ng `--cpu $(nproc) --cpu-load 90`；窗对齐 Case [100,300]",
-        f"- detect_mode: **cross_run_contrast**（C1/C0 中位比≥{args.accept_min_ratio}；"
-        "需外部健康基线 C0，非 run 内自主判据）",
+        f"- case_id: `{args.case_id}`",
+        f"- case_ref: `{case_ref}`",
+        f"- dose: {dose_desc}",
+        f"- detect_mode: **{detect_mode}** "
+        f"（自主=prom hang/slow flags；跨-run=C1/C0 中位比≥{args.accept_min_ratio}，需外部健康基线 C0）",
         f"- metric: jsonl `dur_us` of `{name}` (host-wall around Hccl*)",
         "",
-        "## A) XPUTimer 自主信号（它自己 .prom 的 hang/slow flags；无需外部基线）",
+        "## A) XPUTimer 自主信号（.prom hang/slow flags；无需外部基线）",
         "",
-        f"| arm | coll_events | hang_flags | slow_flags |",
-        f"|-----|-----------:|-----------:|-----------:|",
+        "| arm | coll_events | hang_flags | slow_flags |",
+        "|-----|-----------:|-----------:|-----------:|",
         f"| C0  | {ev0} | {hang0} | {slow0} |",
         f"| C1  | {ev1} | {hang1} | {slow1} |",
         "",
         f"**autonomous_flag (C1 hang+slow>0) = {autonomous_flag}** "
-        f"（S4 配置 SLOW_REPORT_US=0 关、HANG_TIMEOUT_MS=60000；host CPU 抢占够不到 hang 阈）",
+        f"（SLOW_REPORT_US=0 关、HANG_TIMEOUT_MS=60000；未开 oracle INJECT_STALL）",
         "",
         "## B) cross-run 中位对照（需外部健康基线 C0，非自主）",
         "",
-        f"| arm | n | median dur_us | ≥1.5×C0med（噪声诊断，非判据） |",
-        f"|-----|--:|-------------:|------------------------------:|",
+        "| arm | n | median dur_us | ≥1.5×C0med（噪声诊断，非判据） |",
+        "|-----|--:|-------------:|------------------------------:|",
         f"| C0  | {len(c0)} | {m0:.1f} | {slow_c0} |",
         f"| C1  | {len(c1)} | {m1:.1f} | {slow_c1} |",
         "",
@@ -129,7 +202,15 @@ def main() -> int:
         f"{'PASS' if contrast_ok else 'FAIL'} (thr {args.accept_min_ratio})",
         "",
         f"> ⚠️ `≥1.5×C0med` 计数仅作噪声诊断：C0 健康线自身就有 {slow_c0} 个，"
-        "说明该线在集合通信 host-wall 上大面积误报，**不作判据**。",
+        "说明该线在集合通信 host-wall 上可能大面积误报，**不作判据**。",
+        "",
+        "## C) dose_check（step_ms 窗内中位；非 XPUTimer 规则）",
+        "",
+        f"- window: [{args.window_start}, {args.window_stop})",
+        f"- C0 median step_ms: {med_sm0:.3f} (n={len(sm0)})",
+        f"- C1 median step_ms: {med_sm1:.3f} (n={len(sm1)})",
+        f"- C1/C0 step_ms = {step_ratio:.3f} → "
+        f"{'PASS' if dose_ok else 'FAIL/NA'} (thr {args.accept_min_ratio})",
         "",
         "## Verdict",
         "",
@@ -137,34 +218,63 @@ def main() -> int:
         f"(XPUTimer 自己的 hang/slow flags)",
         f"- **cross_run_contrast**: {'PASS' if contrast_ok else 'FAIL'} "
         f"(C1/C0={ratio:.3f}；需外部基线)",
+        f"- **dose_check**: {'PASS' if dose_ok else 'FAIL/NA'} "
+        f"(step_ms C1/C0={step_ratio:.3f})",
+        f"- **detect_ok**: {str(detect_ok).lower()} "
+        f"(autonomous OR cross_run；dose_check 单独记)",
+        f"- **detect_mode**: `{detect_mode}`",
         "",
-        "Note: P3-EXT-A 是 host CPU 抢占；XPUTimer 天花板多为 D0–D1 信号。"
-        "它自主检出=0（hang/slow 未触发）；集合通信 host-wall 也未随 Loud 抬升。"
-        "能力范围内如实记「无咬合」，不声称 D4 RCA。",
+        "Note: 如实记能力边界；无咬合也是 DONE。不改对手阈值、不覆盖 Probing 分。",
         "",
     ]
     text = "\n".join(lines)
-    os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
+    out_dir = os.path.dirname(args.out) or "."
+    os.makedirs(out_dir, exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(text)
+
+    summary_path = args.summary
+    if not summary_path:
+        base = os.path.basename(args.out)
+        if "CONTRAST" in base.upper():
+            summary_path = os.path.join(out_dir, "CONTRAST_SUMMARY.json")
+        else:
+            summary_path = os.path.join(out_dir, "S4_SUMMARY.json")
+
     meta = {
+        "case_id": args.case_id,
+        "tool": "xputimer",
+        "dose": "loud",
+        "case_ref": case_ref,
         "metric_name": name,
         "median_c0": m0,
         "median_c1": m1,
         "coll_ratio": ratio,
         "cross_run_contrast_pass": contrast_ok,
-        "detect_mode": "cross_run_contrast",
+        "detect_mode": detect_mode,
         "autonomous_flag": autonomous_flag,
+        "autonomous_detect": autonomous_flag,
         "hang_flags": {"c0": hang0, "c1": hang1},
         "slow_flags": {"c0": slow0, "c1": slow1},
         "coll_events": {"c0": ev0, "c1": ev1},
         "noise_diag_slow_ge_1p5xc0": {"c0": slow_c0, "c1": slow_c1},
+        "dose_check": {
+            "step_ms_median_c0": med_sm0,
+            "step_ms_median_c1": med_sm1,
+            "step_ms_ratio": step_ratio,
+            "pass": dose_ok,
+            "n_c0": len(sm0),
+            "n_c1": len(sm1),
+            "window": [args.window_start, args.window_stop],
+        },
+        "accept_min_ratio": args.accept_min_ratio,
+        "detect_ok": detect_ok,
     }
-    with open(os.path.join(os.path.dirname(args.out) or ".", "S4_SUMMARY.json"), "w", encoding="utf-8") as f:
+    with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
         f.write("\n")
     print(text)
-    return 0 if (autonomous_flag or contrast_ok) else 2
+    return 0 if detect_ok else 2
 
 
 if __name__ == "__main__":

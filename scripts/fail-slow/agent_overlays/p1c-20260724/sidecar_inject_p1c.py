@@ -95,8 +95,33 @@ def case_2c(seconds: float):
     print("SIDECAR_STOP kind=2c", flush=True)
 
 
+def _3c_worker(duration: float, size: int, ready_q) -> None:
+    """Top-level for mp spawn pickling; each child owns a fresh CUDA context.
+
+    首轮 GEMM+sync 完成后才往 ready_q 报就绪，避免「进程活着但还在 alloc」假 START。
+    """
+    import torch
+    torch.cuda.set_device(0)
+    A = torch.randn(size, size, device="cuda:0", dtype=torch.float16)
+    B = torch.randn(size, size, device="cuda:0", dtype=torch.float16)
+    torch.mm(A, B)
+    torch.cuda.synchronize()
+    try:
+        ready_q.put(1)
+    except Exception:
+        pass
+    t_end = time.time() + duration
+    while time.time() < t_end:
+        torch.mm(A, B)
+        torch.cuda.synchronize()
+
+
 def case_3c(seconds: float):
-    """多进程 GPU 时间片抖动: spawn 多个子进程各自做 GEMM（Loud：6 进程 × 4096）"""
+    """多进程 GPU 时间片抖动: spawn 多个子进程各自做 GEMM（Loud：可拧 NPROC×MAT）
+
+    MetaX/CUDA：父进程 warmup 后必须用 spawn（fork 会 Cannot re-initialize CUDA）。
+    SIDECAR_START 仅在子进程完成首轮 GEMM 后打印，避免假 START / 晚争用。
+    """
     import torch
     import multiprocessing as mp
     torch.cuda.set_device(0)
@@ -105,26 +130,44 @@ def case_3c(seconds: float):
     torch.mm(_w, _w)
     torch.cuda.synchronize()
     del _w
-    print("SIDECAR_START kind=3c", flush=True)
 
     nproc = int(os.environ.get("SIDECAR_3C_NPROC", "6"))
     mat = int(os.environ.get("SIDECAR_3C_MAT", "4096"))
-
-    def worker(duration, size):
-        import torch
-        torch.cuda.set_device(0)
-        A = torch.randn(size, size, device="cuda:0", dtype=torch.float16)
-        B = torch.randn(size, size, device="cuda:0", dtype=torch.float16)
-        t_end = time.time() + duration
-        while time.time() < t_end:
-            torch.mm(A, B)
-            torch.cuda.synchronize()
-
+    ctx = mp.get_context("spawn")
+    ready_q = ctx.Queue()
     procs = []
     for _ in range(nproc):
-        p = mp.Process(target=worker, args=(seconds, mat))
+        p = ctx.Process(target=_3c_worker, args=(seconds, mat, ready_q))
         p.start()
         procs.append(p)
+    ready = 0
+    deadline = time.time() + float(os.environ.get("SIDECAR_3C_READY_S", "120"))
+    while ready < nproc and time.time() < deadline:
+        try:
+            ready_q.get(timeout=2.0)
+            ready += 1
+        except Exception:
+            alive_now = sum(1 for p in procs if p.is_alive())
+            if alive_now == 0 and ready == 0:
+                break
+    alive = sum(1 for p in procs if p.is_alive())
+    need = max(1, nproc // 2)
+    if alive < need:
+        print(
+            f"SIDECAR_FAIL kind=3c alive={alive}/{nproc} ready={ready}/{nproc}",
+            flush=True,
+        )
+        for p in procs:
+            if p.is_alive():
+                p.terminate()
+        for p in procs:
+            p.join(timeout=5)
+        return
+    # soft ready：alive 够即可 START；ready 作证据（训练争用下首轮 GEMM 可能很慢）
+    print(
+        f"SIDECAR_START kind=3c nproc={nproc} mat={mat} alive={alive} ready={ready}",
+        flush=True,
+    )
     for p in procs:
         p.join()
     print("SIDECAR_STOP kind=3c", flush=True)

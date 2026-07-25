@@ -1,0 +1,22 @@
+case_id: P3-SW-B
+dose: loud
+phase: contrast
+run_id: contrast-p3-sw-b-20260725_133435
+case_ref: 20260725_125558-yjr-as-c-p3-sw-b-loud
+world_size: 16
+pod: yysong-worker-2
+pool: pool-xpu
+mode: host_bound
+inject_kind: inline_8b
+inject_args: "mb=16,stall_s=0.25"
+inject_window_measure: [100, 300]
+victim_local_rank: 7
+host_bound_matmul: 768
+seed: 42
+iters: 500
+warmup: 50
+tool: XPUTimer
+label_prefix: yjr-as-b-xpu
+script: platform/ascend/xputimer/contrast_p3swb.sh
+accept_min_ratio: 1.3
+gold_step_ratio: 2.06

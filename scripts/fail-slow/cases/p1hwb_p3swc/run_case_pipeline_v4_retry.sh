@@ -233,8 +233,9 @@ start_sidecar() {   # 在 victim(node0)起注入; freq / 内联 8a 不走这里
       # --vm-keep + --page-in：持续触碰已分配页，避免只 alloc 不扫带宽
       pexec "$v" "nohup stress-ng --vm $VM_N --vm-bytes $VM_BYTES --vm-keep --page-in --timeout 600s >'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START stress_vm_n=${VM_N}_bytes=${VM_BYTES}" 2>/dev/null ;;
     stress_io)
-      # Loud：fio 与训练/ckpt 同盘；bite 标定 numjobs=4 仅 C1/C0≈1.08 → 提到 16 + iodepth
-      pexec "$v" "mkdir -p '$IO_STRESS_DIR'; nohup fio --name=io_stress --rw=randrw --bs=4k --size=4G --numjobs=16 --iodepth=64 --time_based --runtime=600 --directory='$IO_STRESS_DIR' --group_reporting >'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START fio_loud_nj16" 2>/dev/null ;;
+      # Loud：fio 与训练/ckpt 同盘；nj16+iodepth64；direct=1 减页缓存掩盖。
+      # 预布局：期望 IO_STRESS_DIR 已有 io_stress.*.0（16×4G）；否则 create_on_open 仍会 layout。
+      pexec "$v" "mkdir -p '$IO_STRESS_DIR'; printf '%s\n' 'SIDECAR_START fio_loud_nj16_direct' >'$out/injection.log'; nohup fio --name=io_stress --rw=randrw --bs=4k --size=4G --numjobs=16 --iodepth=64 --direct=1 --overwrite=1 --time_based --runtime=600 --directory='$IO_STRESS_DIR' --group_reporting >>'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START fio_loud_nj16_direct" 2>/dev/null ;;
     8a|inline_8a|none) : ;;  # 8a 走训练进程 INLINE_INJECT
     *) echo "  WARN: unknown INJECT_KIND=$INJECT_KIND" ;;
   esac
@@ -381,13 +382,16 @@ export INLINE_GC_STALL_S=${INLINE_GC_STALL_S:-0.25};"
     # P1-EXT-B：外挂 hbm 在 MetaX 上反复咬空 → 默认内联 D2D（USE_INLINE_HBM=0 可退回 sidecar）
     USE_INLINE_HBM="${USE_INLINE_HBM:-1}"
     if [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "hbm" ] && [ "$USE_INLINE_HBM" = "1" ]; then
+      # P1-HW-B ramp: COPIES=6→COPIES_MAX=48；P1-EXT-B 固定 copies 时设 INLINE_HBM_COPIES=48
       denv="${denv}
 export INLINE_INJECT=hbm;
 export INLINE_VICTIM_LOCAL_RANK=$SIDECAR_LOCAL_RANK;
 export INLINE_INJECT_START=$INJECT_START_MEASURE_STEP;
 export INLINE_INJECT_STOP=$INJECT_STOP_MEASURE_STEP;
 export INLINE_HBM_MB=${INLINE_HBM_MB:-512};
-export INLINE_HBM_COPIES=${INLINE_HBM_COPIES:-48};"
+export INLINE_HBM_COPIES=${INLINE_HBM_COPIES:-6};
+export INLINE_HBM_COPIES_MAX=${INLINE_HBM_COPIES_MAX:-48};
+export INLINE_HBM_RAMP=${INLINE_HBM_RAMP:-1};"
     fi
 
     if [ "$IS_FREQ" = "1" ] && [ "$inj" = "yes" ]; then

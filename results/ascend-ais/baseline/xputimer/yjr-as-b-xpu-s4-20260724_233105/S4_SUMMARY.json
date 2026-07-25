@@ -1,0 +1,25 @@
+{
+  "metric_name": "HcclAllReduce",
+  "median_c0": 126.0,
+  "median_c1": 130.0,
+  "coll_ratio": 1.0317460317460319,
+  "cross_run_contrast_pass": false,
+  "detect_mode": "cross_run_contrast",
+  "autonomous_flag": false,
+  "hang_flags": {
+    "c0": 0,
+    "c1": 0
+  },
+  "slow_flags": {
+    "c0": 0,
+    "c1": 0
+  },
+  "coll_events": {
+    "c0": 81401,
+    "c1": 81401
+  },
+  "noise_diag_slow_ge_1p5xc0": {
+    "c0": 10327,
+    "c1": 11288
+  }
+}

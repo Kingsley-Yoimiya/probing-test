@@ -1,0 +1,44 @@
+{
+  "case_id": "P1-EXT-B",
+  "tool": "xputimer",
+  "dose": "loud",
+  "case_ref": "20260725_014350-yjr-as-c-p1-ext-b-loud",
+  "metric_name": "HcclAllReduce",
+  "median_c0": 113.0,
+  "median_c1": 111.0,
+  "coll_ratio": 0.9823008849557522,
+  "cross_run_contrast_pass": false,
+  "detect_mode": "cross_run_contrast",
+  "autonomous_flag": false,
+  "autonomous_detect": false,
+  "hang_flags": {
+    "c0": 0,
+    "c1": 0
+  },
+  "slow_flags": {
+    "c0": 0,
+    "c1": 0
+  },
+  "coll_events": {
+    "c0": 81401,
+    "c1": 81401
+  },
+  "noise_diag_slow_ge_1p5xc0": {
+    "c0": 2056,
+    "c1": 926
+  },
+  "dose_check": {
+    "step_ms_median_c0": 75.502,
+    "step_ms_median_c1": 156.208,
+    "step_ms_ratio": 2.068925326481418,
+    "pass": true,
+    "n_c0": 3200,
+    "n_c1": 3200,
+    "window": [
+      100,
+      300
+    ]
+  },
+  "accept_min_ratio": 1.6,
+  "detect_ok": false
+}

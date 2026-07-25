@@ -235,10 +235,12 @@ def main() -> None:
         idx = get_batch()                       # host_bound: 喂数时间落在此处
         t_data = time.perf_counter()
 
-        # P2-SW-C Loud 辅剂量：额外 AllReduce 模拟绕远路通信成本（env TOPO_EXTRA_AR）
+        # P2-SW-C Loud 辅剂量：额外 AllReduce 模拟绕远路通信成本
+        # TOPO_EXTRA_AR=次数；TOPO_AR_ELEMS=张量元素数（默认 1024；可加大咬合力度）
         extra_ar = int(os.environ.get("TOPO_EXTRA_AR", "0"))
         if extra_ar > 0:
-            dummy = torch.ones(1024, device=device)
+            ar_elems = max(1024, int(os.environ.get("TOPO_AR_ELEMS", "1024")))
+            dummy = torch.ones(ar_elems, device=device)
             for _ in range(extra_ar):
                 dist.all_reduce(dummy)
             torch.cuda.synchronize()

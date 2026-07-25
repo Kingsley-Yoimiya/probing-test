@@ -1,0 +1,3 @@
+INLINE_2C_COMPILE every=1 base_n=1024 fallback_s=0.25 win=[100,300) victim_local=7
+SIDECAR_START kind=inline_2c n=1024 every=1 fallback_s=0.25 victim=7
+SIDECAR_STOP

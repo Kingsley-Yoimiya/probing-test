@@ -1,0 +1,3 @@
+INLINE_HBM_ALLOC mb=512 copies/step=48
+SIDECAR_START kind=inline_hbm mb=512 copies=48 victim=7
+SIDECAR_STOP

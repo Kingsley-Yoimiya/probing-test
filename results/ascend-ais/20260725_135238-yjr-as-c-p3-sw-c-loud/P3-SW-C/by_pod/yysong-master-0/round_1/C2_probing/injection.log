@@ -1,0 +1,6 @@
+SIDECAR_START kind=8c_loud
+SIDECAR_8C_START: monitoring overhead stress=yes cpu_n=320 cpu_load=90 chunk_mb=1/1.0s max_chunks=64 nproc=320
+SIDECAR_8C_STRESS pid=3145526
+SIDECAR_SIGNAL signum=15
+SIDECAR_8C_STOP threads=49 mem≈49MB_est
+SIDECAR_STOP kind=8c_loud

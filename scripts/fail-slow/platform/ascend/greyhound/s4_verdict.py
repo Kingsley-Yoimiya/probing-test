@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Greyhound S4 verdict · P3-EXT-A Loud 同剂量对照.
+"""Greyhound S4 / Contrast verdict · 同剂量对照.
 
 两轴分开记（不把 Case step_ms 答案焊进 Greyhound 判据）:
   A) autonomous_coll: C1/C0 median HcclAllReduce dur_us（collect-min JSONL）
@@ -178,9 +178,22 @@ def main() -> int:
     ap.add_argument("--inject-stop", type=int, default=300)
     ap.add_argument("--accept-min-ratio", type=float, default=1.3)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--summary", default="", help="CONTRAST_SUMMARY.json 路径；默认 dump-root 下")
+    ap.add_argument("--case-id", default="P3-EXT-A")
+    ap.add_argument("--case-ref", default="20260724_231918-yjr-as-c-p3exta-loud")
+    ap.add_argument(
+        "--dose-desc",
+        default="stress-ng `--cpu $(nproc) --cpu-load 90`",
+    )
+    ap.add_argument("--tool", default="greyhound")
+    ap.add_argument("--run-id", default="")
+    ap.add_argument("--pod", default="yysong-worker-1")
+    ap.add_argument("--frozen", default="")
+    ap.add_argument("--note", default="")
     args = ap.parse_args()
 
     root = args.dump_root
+    run_id = args.run_id or Path(root).name
     c0_jsonl = os.path.join(root, "C0_baseline", "greyhound", "hcclprobe.collect.jsonl")
     c1_jsonl = os.path.join(root, "C1_inject_none", "greyhound", "hcclprobe.collect.jsonl")
     c0_ranks = os.path.join(root, "C0_baseline", "ranks")
@@ -216,15 +229,23 @@ def main() -> int:
         f"注入窗 [{args.inject_start},{args.inject_stop}] 仅标注；"
         f"step_ms 窗比={step_ratio:.3f}（剂量核对，非 Greyhound 规则）"
     )
+    default_note = (
+        f"{args.case_id} 注入下 Greyhound 主路径是 CCL 时间戳+变点。"
+        "若 coll/Rbeast 无咬合而 step_ms 有抬升，记能力边界，不焊 D4。"
+    )
+    note = args.note or default_note
 
     lines = [
-        "# Greyhound S4 · P3-EXT-A Loud contrast",
+        f"# Greyhound Contrast · {args.case_id} Loud",
         "",
-        f"- case_ref: `20260724_231918-yjr-as-c-p3exta-loud` (C1/C0 step_ms=1.97)",
-        f"- dose: stress-ng `--cpu $(nproc) --cpu-load 90`；窗对齐 Case [{args.inject_start},{args.inject_stop}]",
-        f"- detect_mode: **{detect_mode}**（自主= coll 比≥{args.accept_min_ratio} 或 Rbeast 变点[C1有/C0无]）",
+        f"- run_id: `{run_id}`",
+        f"- case_ref: `{args.case_ref}`",
+        f"- dose: {args.dose_desc}；窗对齐 Case [{args.inject_start},{args.inject_stop}]",
+        f"- fairness: `collect_seq` 真实 per-rank 序列 + C0 假阳性对照",
+        f"- detect_ok: **{'yes' if auto_ok else 'no'}**；detect_mode: **{detect_mode}**"
+        f"（自主= coll 比≥{args.accept_min_ratio} 或 Rbeast 变点[C1有/C0无]）",
         f"- oracle_trigger: **no**（未把注入窗写入判定）；{oracle_note}",
-        f"- preload: cyclecounter stub + libhcclprobe.so；Redis :16379",
+        f"- preload: cyclecounter stub + libhcclprobe.so；Redis :16379；pod=`{args.pod}`",
         "",
         "## A) autonomous · collect-min AllReduce host-wall",
         "",
@@ -268,8 +289,7 @@ def main() -> int:
         f"(coll_pass={coll_pass}, rbeast_hit={rbeast_hit}, rbeast_fp={rbeast_fp})",
         f"- **dose_reproduced**: {'YES' if dose_ok else 'NO/WEAK'} (step_ms)",
         "",
-        "Note: P3-EXT-A 是 host CPU 抢占；Greyhound 主路径是 CCL 时间戳+变点。"
-        "若 coll/Rbeast 无咬合而 step_ms 有抬升，记能力边界（同 XPUTimer S4），不焊 D4。",
+        f"Note: {note}",
         "",
     ]
     text = "\n".join(lines)
@@ -288,7 +308,23 @@ def main() -> int:
         "autonomous_detect": auto_ok,
         "detect_mode": detect_mode,
         "oracle_trigger": False,
+        "case_id": args.case_id,
+        "tool": args.tool,
+        "dose": "loud",
+        "frozen": args.frozen or args.dose_desc,
+        "case_ref": args.case_ref,
+        "world_size": 16,
+        "pool": "pool-gh",
+        "pod": args.pod,
+        "run_id": run_id,
+        "detect_ok": bool(auto_ok),
+        "fairness": "collect_seq_real_per_rank + C0_fp_control",
     }
+    summary_path = args.summary or os.path.join(root, "CONTRAST_SUMMARY.json")
+    with open(summary_path, "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+    # 兼容旧 S4 产物名
     with open(os.path.join(root, "S4_SUMMARY.json"), "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2, ensure_ascii=False)
         f.write("\n")

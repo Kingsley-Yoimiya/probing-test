@@ -197,6 +197,8 @@ wait_measure_step() {  # $1=out_dir $2=measure step marker
 
 start_sidecar() {   # 在 victim(node0)起注入; freq / 内联 8a 不走这里
   local v="${PODS[0]}"
+  # PRE_TRAIN 时训练尚未 mkdir ranks；确保 injection.log 父目录存在
+  pexec "$v" "mkdir -p '$out'" 2>/dev/null || true
   case "$INJECT_KIND" in
     cube|hbm)
       # MetaX：只用 MACA_VISIBLE_DEVICES 钉 victim 卡；同时设 CUDA=MACA 易在部分栈上错位。
@@ -204,7 +206,8 @@ start_sidecar() {   # 在 victim(node0)起注入; freq / 内联 8a 不走这里
       pexec "$v" "rm -f '$out/injection.log'; MACA_VISIBLE_DEVICES=$SIDECAR_LOCAL_RANK PYTHONUNBUFFERED=1 env -u CUDA_VISIBLE_DEVICES nohup /opt/conda/bin/python3.12 -u '$CODE_DIR/sidecar_inject.py' --kind '$INJECT_KIND' --duty '$DUTY' --warmup-seconds '$SIDECAR_WARMUP' --seconds 1800 --size '$SIZE' >'$out/injection.log' 2>&1 & echo SC=\$!" 2>/dev/null ;;
     1b|1c|2b|2c|3c|5b|8b|8c)
       # overlay：v2 日志必须进 injection.log（wait_sidecar_start 只认这里）
-      pexec "$v" "rm -f '$out/injection.log'; MACA_VISIBLE_DEVICES=$((NPROC-1)) PYTHONUNBUFFERED=1 env -u CUDA_VISIBLE_DEVICES SIDECAR_3C_NPROC=\${SIDECAR_3C_NPROC:-6} SIDECAR_3C_MAT=\${SIDECAR_3C_MAT:-4096} nohup /opt/conda/bin/python3.12 -u '$CODE_DIR/sidecar_inject_v2.py' --case $INJECT_KIND --seconds 600 --frac $FRAC >'$out/injection.log' 2>&1 & echo SC=\$!" 2>/dev/null ;;
+      # 3c 剂量从 host 展开进 pod（勿 \${} 指望 pod 环境）
+      pexec "$v" "rm -f '$out/injection.log'; MACA_VISIBLE_DEVICES=$((NPROC-1)) PYTHONUNBUFFERED=1 env -u CUDA_VISIBLE_DEVICES SIDECAR_3C_NPROC=${SIDECAR_3C_NPROC:-6} SIDECAR_3C_MAT=${SIDECAR_3C_MAT:-4096} SIDECAR_3C_READY_S=${SIDECAR_3C_READY_S:-120} nohup /opt/conda/bin/python3.12 -u '$CODE_DIR/sidecar_inject_v2.py' --case $INJECT_KIND --seconds ${SIDECAR_SECONDS:-1800} --frac $FRAC >'$out/injection.log' 2>&1 & echo SC=\$!" 2>/dev/null ;;
     stress_cpu)
       # Loud 默认全核 90%；Quiet/Masked 经 INJECT_ARGS: cpu_n / cpu_load / cpu_frac
       local ncpu="${CPU_N}" cl="${CPU_LOAD:-90}"
@@ -233,11 +236,18 @@ start_sidecar() {   # 在 victim(node0)起注入; freq / 内联 8a 不走这里
 
 wait_sidecar_start() {  # $1=out_dir；GPU sidecar 必须见到 SIDECAR_START，否则注入窗空转
   local out="$1" v="${PODS[0]}" e=0
-  local budget=$(( SIDECAR_WARMUP + 30 ))
+  # 3c spawn+首轮 GEMM 可能较久；预算=WARMUP+READY+余量
+  local ready_budget="${SIDECAR_3C_READY_S:-120}"
+  local budget=$(( SIDECAR_WARMUP + ready_budget + 30 ))
   while [ "$e" -lt "$budget" ]; do
     if pexec "$v" "grep -q 'SIDECAR_START' '$out/injection.log' 2>/dev/null" 2>/dev/null; then
       echo "  sidecar START ok(${e}s)"
       return 0
+    fi
+    if pexec "$v" "grep -q 'SIDECAR_FAIL' '$out/injection.log' 2>/dev/null" 2>/dev/null; then
+      echo "  sidecar START failed: SIDECAR_FAIL in log"
+      pexec "$v" "tail -n 40 '$out/injection.log' 2>/dev/null" 2>/dev/null || true
+      return 1
     fi
     if pexec "$v" "ls '$out'/node_*.fail >/dev/null 2>&1" 2>/dev/null; then
       echo "  sidecar START aborted: training fail"
@@ -265,7 +275,8 @@ is_gpu_sidecar() {
 }
 stop_sidecar() {
   # 先 SIGTERM 让 sidecar 打 SIDECAR_STOP；再 -9。模式避免误杀 kubectl exec bash。
-  pexec "${PODS[0]}" 'pkill -TERM -f "[s]idecar_inject" 2>/dev/null || true; sleep 1; pkill -9 -f "[s]idecar_inject" 2>/dev/null || true; pkill -TERM stress-ng 2>/dev/null || true; sleep 1; pkill -9 stress-ng 2>/dev/null || true; pkill -9 -f "[s]tress-ng" 2>/dev/null || true; pkill -f "fio.*io_stress" 2>/dev/null || true; pkill -f "[i]b_write_bw" 2>/dev/null || true; exit 0' 2>/dev/null || true
+  # 3c spawn 子进程在父死后可能残留，一并清掉。
+  pexec "${PODS[0]}" 'pkill -TERM -f "[s]idecar_inject" 2>/dev/null || true; sleep 1; pkill -9 -f "[s]idecar_inject" 2>/dev/null || true; pkill -9 -f "[m]ultiprocessing.spawn" 2>/dev/null || true; pkill -TERM stress-ng 2>/dev/null || true; sleep 1; pkill -9 stress-ng 2>/dev/null || true; pkill -9 -f "[s]tress-ng" 2>/dev/null || true; pkill -f "fio.*io_stress" 2>/dev/null || true; pkill -f "[i]b_write_bw" 2>/dev/null || true; exit 0' 2>/dev/null || true
   return 0
 }
 
@@ -418,18 +429,47 @@ export INLINE_HBM_COPIES=${INLINE_HBM_COPIES:-48};"
       fire_training "$port" "$out" "$denv" "$r"; echo "  fired(freq=$FREQ_LEVEL)"
       wait_warmup "$out"
     else
+      # PRE_TRAIN_SIDECAR=1：训练前起 GPU sidecar 并确认 START，使 measure 窗全程争用
+      _pre=0
+      if [ "$inj" = "yes" ] && [ "${PRE_TRAIN_SIDECAR:-0}" = "1" ] && is_gpu_sidecar; then
+        _pre=1
+      fi
+      if [ "$_pre" = "1" ]; then
+        echo "  PRE_TRAIN sidecar before fire (victim L$SIDECAR_LOCAL_RANK)"
+        start_sidecar; echo "  sidecar($INJECT_KIND) up on local_rank=$SIDECAR_LOCAL_RANK"
+        if ! wait_sidecar_start "$out"; then
+          echo "  FAILED: GPU sidecar did not reach SIDECAR_START (pre-train)"
+          pipe_rc=1
+          stop_sidecar
+        fi
+        # 再等一小段让 spawn 子进程进入稳定 mm 循环
+        settle="${PRE_TRAIN_SETTLE_S:-10}"
+        echo "  pre-train settle ${settle}s"
+        sleep "$settle"
+      fi
       # 统一从训练中触发。WARMUP=50 时 measure 100/300 即总 step 150--350；
       # cube/hbm 自身再预热 >=5 秒，避免 MetaX 时间片隔离导致的伪阴性。
       fire_training "$port" "$out" "$denv" "$r"; echo "  fired"
       wait_warmup "$out"
-      if [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "hbm" ] && [ "${USE_INLINE_HBM:-1}" = "1" ]; then
+      if [ "$_pre" = "1" ]; then
+        echo "  PRE_TRAIN sidecar already running through measure window"
+      elif [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "hbm" ] && [ "${USE_INLINE_HBM:-1}" = "1" ]; then
         echo "  inline_hbm armed (victim local_rank=$SIDECAR_LOCAL_RANK mb=${INLINE_HBM_MB:-256})"
         pexec "${PODS[0]}" "printf '%s\n' 'SIDECAR_WARMUP kind=inline_hbm' 'SIDECAR_START kind=inline_hbm' >'$out/injection.log'" 2>/dev/null || true
       elif [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "2c" ]; then
         echo "  inline_2c armed (victim local_rank=$SIDECAR_LOCAL_RANK n=${INLINE_2C_N:-1536})"
         pexec "${PODS[0]}" "printf '%s\n' 'SIDECAR_WARMUP kind=inline_2c' 'SIDECAR_START kind=inline_2c' >'$out/injection.log'" 2>/dev/null || true
       elif [ "$inj" = "yes" ] && [ "$INJECT_KIND" != "none" ] && [ "$INJECT_KIND" != "8a" ] && [ "$INJECT_KIND" != "inline_8a" ]; then
-        if wait_measure_step "$out" "$INJECT_START_MEASURE_STEP"; then
+        # EARLY_GPU_SIDECAR=1 或 INJECT_START_MEASURE_STEP=0：warmup 后立刻起 sidecar，
+        # 让 [100,300] 中位窗全程有争用（避免 3c alloc 晚到 step≈240 假阴性）。
+        _early=0
+        if [ "${EARLY_GPU_SIDECAR:-0}" = "1" ] || [ "${INJECT_START_MEASURE_STEP}" = "0" ]; then
+          _early=1
+        fi
+        if [ "$_early" = "1" ] || wait_measure_step "$out" "$INJECT_START_MEASURE_STEP"; then
+          if [ "$_early" = "1" ]; then
+            echo "  EARLY sidecar after warmup (INJECT_START_MEASURE_STEP=${INJECT_START_MEASURE_STEP})"
+          fi
           start_sidecar; echo "  sidecar($INJECT_KIND) up on local_rank=$SIDECAR_LOCAL_RANK"
           if is_gpu_sidecar; then
             if ! wait_sidecar_start "$out"; then

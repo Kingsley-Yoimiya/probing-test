@@ -1,0 +1,2 @@
+run_id,case_id,dose,tool,d_level,d1_step,d_final_step,target_reported,target_truth,grid_reported,grid_truth,c0_med,c1_med,c2_med,c1_c0,loc_config,tool_probing_sql,tool_greyhound,tool_xputimer,notes
+20260725_011129-yjr-as-c-p1-ext-a-loud,P1-EXT-A,loud,offline_training_metrics,2,101,101,rank_4,rank_7,,P1-EXT,77.43,300.00,299.37,3.87,C1_inject_none,SQL_PENDING,PENDING,PENDING,"D1: C1/C0_step_ms=3.87; D2: IoU=1.00 det=[100,300] gt=[100,300] onset=101; D3_signal=min_wait_among_slow rank=4 wait=0.88 slow_n=0 step=300.2; D3_fail: reported=4 truth=7"

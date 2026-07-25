@@ -1,0 +1,3 @@
+SQL: SELECT * FROM cpu.tasks LIMIT 50
+----
+error=no_probing_attach

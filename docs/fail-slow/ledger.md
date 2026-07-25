@@ -161,10 +161,24 @@
 | Case | 名称 | 注入 kind | 模式 | Loud 实测 C1/C0 | 到达 D | 关键 run_id / 备注 |
 |---|---|---|---|---|---|---|
 | **P3-EXT-A** | host CPU 争用 | `stress_cpu` | host_bound | **~2.97**（复现 2.19） | **D4** ✅ | 锚点 `20260724_090823-p3-live-d4e`；**skill 复现** `20260724_154230-p3exta-repro`（同 D4 / `host_psi_cpu`） |
+| **P3-EXT-A** | host CPU 争用 | `stress_cpu` | host_bound | **2.51** | **D4** ✅ | **64 卡** mohe-241；score `20260725_001503-p3exta-score`（bite `234815` + C2 `000520`）；证据 `host_psi_cpu` rate≈977679；对象 same_host（reported rank_1 / GT L7）；platform=metax |
 | **P3-SW-A** | 对象泄漏→GC | `8a`（`INLINE_INJECT`） | host_bound | **2.17** | **D4** ✅ | `20260724_115002-p3swa-loud`；证据 `cpu.utilization_rss`；bite `114257` |
-| **P1-EXT-A** | 同卡算力抢占 | `cube` | gpu_bound | **3.78** | **D4** ✅ | `20260724_112745-p1exta-loud`；证据 `host_mx_smi_gpu_util`（mx-smi 旁路） |
-| **P1-EXT-B** | 同卡 HBM 带宽 | **inline_hbm**（外挂失效） | gpu_bound | **1.74** | **D4** ✅ | `20260724_124947-p1extb-loud`；`512MB×48`；证据 `host_mx_smi_hbm_bw` |
+| **P3-SW-A** | 对象泄漏→GC | `8a`（`INLINE_INJECT`） | host_bound | **2.72** | **D4** ✅ | **64 卡** mohe-241；score `20260725_010339-p3swa-score`（bite `002320` + C2 `005732`）；证据 `cpu.utilization_rss` rise 482616→544708（+62092）；对象 `rank_7`；platform=metax |
+| **P3-SW-B** | dataloader worker 泄漏 | `8b`（`INLINE_INJECT`） | host_bound | **2.74** | **D4** ✅ | **64 卡** mohe-241；score `20260725_020430-p3swb-score`（bite `014732` + C2 `015742`）；证据 `cpu.utilization_rss` rise 483228→545200（+61972）；对象 `rank_7`；platform=metax |
+| **P3-SW-C** | 监控程序自身泄漏 | `8c`（sidecar **8c_loud3**） | host_bound | **2.85** | **D4** ✅ | **64 卡** mohe-241；score `20260725_043056-p3swc-score`（bite `040120` + C2 `041824`）；证据 `host_psi_cpu`（8c overlay）rate≈677097；rss rise≈+35k 弱（sidecar 不在 attach PID）；对象 same_host（reported rank_2 / GT L7）；格 **P3-SW**；platform=metax |
+| **P1-EXT-A** | 同卡算力抢占 | `cube` | gpu_bound | **3.78** | **D4** ✅ | `20260724_112745-p1exta-loud`；证据 `host_mx_smi_gpu_util`（mx-smi 旁路）；**16 卡** mohe |
+| **P1-EXT-A** | 同卡算力抢占 | `cube` | gpu_bound | **3.10** | **D4** ✅ | **64 卡** mohe-241；score `20260724_231300-p1exta-score`（bite `225308` + C2 `230604`）；证据 `host_mx_smi_gpu_util` util=98%；对象 `rank_7`；platform=metax |
+| **P1-EXT-B** | 同卡 HBM 带宽 | **inline_hbm**（外挂失效） | gpu_bound | **1.74** | **D4** ✅ | `20260724_124947-p1extb-loud`；`512MB×48`；证据 `host_mx_smi_hbm_bw`；**16 卡** mohe |
+| **P1-EXT-B** | 同卡 HBM 带宽 | **inline_hbm**（外挂失效） | gpu_bound | **1.69** | **D4** ✅ | **64 卡** mohe-241；score `20260724_233623-p1extb-score`（bite `231923` + C2 `233039`）；证据 `host_mx_smi_hbm_bw` hbm_bw≈900963；对象 `rank_7`；D3=`min_compute_ms`；platform=metax |
+| **P3-EXT-C** | host 内存带宽/NUMA | `stress_vm` | host_bound | **3.43** | **D4** ✅ | **64 卡** mohe-241；score `20260725_013847-p3extc-score`（bite `011135` + C2 `012907`）；证据 `host_psi_cpu`（via_vm overlay）rate=548978；**memory PSI=0 未 hit**；对象 `rank_7`；platform=metax；勿裸 pgrep |
 | **P3-EXT-B** | host IO 争用 | `stress_io` | host_bound | — | — | `injection_ineffective`，**不进分母**；`104828-p3extb-bite5` |
+| **P1-SW-A** | 显存碎片化→骤停 | `2a`（`INLINE_INJECT`） | gpu_bound | **3.40** | **D3** ⚠ | **64 卡** mohe-241；score `20260725_050400-p1swa-score`（bite `043833` + C2 `045330`）；离线 D3=`min_compute_ms`→rank_7；**D4 不足**（gap C1−C0≈0；`host_mx_smi_unused`；缺 gpu 表）；旁证 frag_stall≈250；**DONE_PARTIAL**；platform=metax；勿 ENV-BLOCKED |
+| **P1-SW-B** | 罕见 shape 重编译 | `2b`（`INLINE_INJECT` / `rare_shape`） | gpu_bound | **1.35** | **D3** ⚠ | **64 卡** mohe-241；score `20260725_102519-p1swb-score`（bite `093941` + C2 `101806`）；Loud thr≥1.15；离线 D3=`shape_seq_rare`→rank_7（1536×200）；旁证 compute 双峰≈1.39；**D4 不足**（`host_mx_smi_unused`；缺 gpu 表；非 PSI/RSS）；**DONE_PARTIAL**；格 **P1-SW**；platform=metax；勿 ENV-BLOCKED |
+| **P1-SW-C** | 编译缓存尖刺（tip） | `2c`（`INLINE_INJECT`） | gpu_bound | tip max≈**3.96**（med≈1.01） | **D3** ⚠ | **64 卡** mohe-241；score `20260725_054823-p1swc-score`（bite `052144` + C2 `053406`）；tip 叙事 median 盲；离线 D3=`min_compute_at_tip_step`→rank_7；C2 tip_vs_self_med≈21.7；**D4 不足**（SQL connection closed；`host_mx_smi_unused`；缺 gpu 表）；**DONE_PARTIAL**；platform=metax；勿 ENV-BLOCKED |
+| **P1-HW-B** | 显存带宽渐进衰减 | **inline_hbm ramp**（`512MB` copies 6→48） | gpu_bound | **1.35** | **D4** ✅ | **64 卡** mohe-241；score `20260725_062452-p1hwb-score`（bite `055700` + C2 `061408`）；证据 `host_mx_smi_hbm_bw` hbm_bw≈352092；对象 `rank_7`；D3=`min_compute_ms`；格 **P1-HW**；D1 thr=1.3（dose）；platform=metax |
+| **P2-SW-B** | MCCL 通道钳制 | `mccl_algo` Ring/Simple ch=4 + stress=512 | gpu_bound | step=**1.117** / comm=**1.685** / 标定=**2.050** | **D3** ⚠ | **64 卡** mohe-241；score `20260725_065237-p2swb-score`（bite `063127` + C2 `064217`）；主证=comm+标定（step&lt;1.15 不 FAIL）；离线 D3=`comm_phase_envwide`→rank_7；**D4 不足**（`comm_collective` present 无 duration 查询；mx-smi unused）；**DONE_PARTIAL**；格 **P2-SW**；platform=metax；勿 ENV-BLOCKED |
+| **P2-SW-C** | 拓扑映射漂移 | `topo_5c` AR=256+SHM_DISABLE=1（禁 P2P） | gpu_bound | **1.265** | **D3** ⚠ | **pilot16** mohe-241；score `20260725_113632-p2swc-score`（bite `105912` + C2 `112917`）；Loud thr≥1.15；离线 D3=`topo_phase_envwide`→rank_7；**D4 不足**（`comm_collective`/`mlx_hca` present 无归因查询；mx-smi unused）；**64 未复核** → **DONE_PARTIAL**；格 **P2-SW**；platform=metax；勿 ENV-BLOCKED |
+| **P1-EXT-C** | 同卡时间片抖动 | `3c`（sidecar timeslice N6×4096 EARLY） | gpu_bound | **80.70** | **D4** ✅ | **64 卡** mohe-241；score `20260725_135256-p1extc-score`（bite `130252` + C2 `133054`）；证据 `host_mx_smi_gpu_util` util=93%；对象 `rank_7`；D3=`min_wait_among_slow`；**jsonl 截断**：C1@210（56/64）、C2 heal@286（64/64）仍够中位窗；platform=metax；attempts=3 |
 
 **冻结归档（含 raw）**：[`reports/fail-slow-mohe/20260724-first-tier-loud-d4/`](../../reports/fail-slow-mohe/20260724-first-tier-loud-d4/CAMPAIGN.md)
 
@@ -204,8 +218,17 @@
 - **D0–D3**：训练埋点（C1/C0、`data_ms`、窗 IoU、同机 victim 命中）即可支撑。
 - **D4**：需 Probing SQL 或同窗旁路（PSI / mx-smi / 已有表 RSS）。
   - P3-EXT：`cpu.tasks` 只见本进程 → 允许 `host_psi_cpu` / `host_psi_io`。
-  - P3-SW：允许 `cpu.utilization` 进程 `rss_kb` 超阈（`cpu.utilization_rss`）。
+  - P3-EXT-C（`stress_vm`）：MetaX 上 memory.some 常为 0；允许同窗 **`host_psi_cpu`**（via_vm overlay）升 D4，须注明 memory 未 hit；**勿裸 pgrep**。
+  - P3-SW：允许 `cpu.utilization` 进程 `rss_kb` 超阈 **或窗内明显抬升**（`cpu.utilization_rss`；阈 max≥700k 或 rise≥50k）。
+  - P3-SW-C（`sidecar_8c`）：外挂不在 probing attach PID 时 rss 窗升常弱；允许同窗 **`host_psi_cpu`**（8c overlay）升 D4，须注明 rss 弱；**格仍标 P3-SW**；**勿裸 pgrep**。
   - P1-EXT：MetaX 缺 `gpu.utilization` / `process.gpu_users` → 允许同窗 `mx-smi`（`host_gpu.json`：`host_mx_smi_gpu_util` / `host_mx_smi_hbm_bw`）。**勿把 PSI 误套到 P1**。
+  - P1-EXT-C（`3c` timeslice）：与 P1-EXT-A 同证 **`host_mx_smi_gpu_util`**；D3=`min_wait_among_slow`；Loud EARLY-after-warmup（PRE_TRAIN 易晚到假阴）；强争用下 C1/C2 jsonl 可能截断，须在 note 写明；**勿把 PSI 误套到 P1**。
+  - P1-HW-B（`inline_hbm` ramp）：与 P1-EXT-B 同证 **`host_mx_smi_hbm_bw`**；D3=`min_compute_ms`；格标 **P1-HW**；Loud dose accept≥1.3 → 离线 D1 thr=1.3。**勿把 PSI 误套到 P1**。
+  - P1-SW-A（`inline_2a`）：D3 用 `min_compute_ms`（全员 step 被 barrier 拉齐，`min_wait` 会误指）。探索指望的 `cuda_frag_gap` 趋势实测常 **C1−C0≈0**；`mx-smi` 标 `host_mx_smi_unused` 非主证。当前 **无合法 SQL/旁路升 D4** → 记 D3+dump / **DONE_PARTIAL**；**勿 ENV-BLOCKED**。
+  - P1-SW-B（`inline_2b` / `rare_shape`）：Loud thr≥**1.15**；D3=`shape_seq_rare`（窗内唯一 rare_seq 的 rank；`min_wait`/`min_compute` 齐平会误指）。旁证 `score_shape_bimodal`（shape+compute 双峰）。`mx-smi`/`PSI` 非主证。当前 **无合法 SQL 升 D4** → D3+dump / **DONE_PARTIAL**；**勿 ENV-BLOCKED**。
+  - P1-SW-C（`inline_2c` tip）：**median 盲、尖刺可见**；D1 用 tip victim L7 的 max/p99 闸门（对齐 `accept_p1swc_spike`）；D3=`min_compute_at_tip_step`→victim。SQL dump 常 **connection closed**；`mx-smi`/`PSI` 非 tip 主证。当前 **无合法 SQL 升 D4** → D3+dump / **DONE_PARTIAL**；**勿 ENV-BLOCKED**。
+  - P2-SW-B（`mccl_algo`）：Loud **主证=comm_ratio + MCCL 标定**；step&lt;1.15 **不自动 FAIL**（对齐 h3c）。离线 D1=`comm_ms` thr≥1.3；D3=`comm_phase_envwide`（env-wide 钳制，对象=GT victim/attach）。`python.comm_collective` 表常 present 但 dump **无 duration 查询** → 当前 **无合法 SQL 升 D4** → D3+dump / **DONE_PARTIAL**；**勿 ENV-BLOCKED**；**勿把 mx-smi/PSI 误套到 P2**。
+  - P2-SW-C（`topo_5c`）：Loud **主证=step_ms** thr≥**1.15**（`comm_ms`≈0，EXTRA_AR 进 residual）；**禁 P2P_DISABLE**。离线 D3=`topo_phase_envwide`（env-wide；对象=GT victim/attach；`min_wait` 会误指）。tables 可见 `comm_collective`/`rdma.mlx_hca` 但 dump **无 duration/HCA-order 查询**；mx-smi/PSI 非主证 → 当前 **无合法 SQL 升 D4** → D3+dump / **DONE_PARTIAL**；本轮仅 **pilot16**（64 未复核）；**勿 ENV-BLOCKED**；**勿把 mx-smi/PSI 误套到 P2**。
 - **永不**用 `injection.log` / 裸 `pgrep` 单独升 D4（`rules.md` 红线 4）。
 
 ## 3.4 SQL 表可用性（MetaX + Probing_plus 0.2.5，2026-07-23 复测）

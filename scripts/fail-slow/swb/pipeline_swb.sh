@@ -18,7 +18,7 @@ set -uo pipefail
 
 # ===== 参数 =====
 CASE="${CASE:?need CASE}"
-INJECT_KIND="${INJECT_KIND:?need INJECT_KIND (mccl_algo|rare_shape|2b|cube|hbm|8a|none|...)}"
+INJECT_KIND="${INJECT_KIND:?need INJECT_KIND (mccl_algo|mccl_fallback|rare_shape|2b|cube|hbm|8a|none|...)}"
 INJECT_ARGS="${INJECT_ARGS:-}"
 GROUP_ID="${GROUP_ID:-0}"
 IFS=',' read -r -a PODS <<< "${PODS:?need PODS csv}"
@@ -78,11 +78,25 @@ MCCL_ALGO_V=$(echo "$INJECT_ARGS" | grep -oE 'algo=[A-Za-z0-9_]+' | cut -d= -f2 
 MCCL_PROTO_V=$(echo "$INJECT_ARGS" | grep -oE 'proto=[A-Za-z0-9_]+' | cut -d= -f2 || true); MCCL_PROTO_V="${MCCL_PROTO_V:-Simple}"
 MCCL_MIN_CH=$(echo "$INJECT_ARGS" | grep -oE 'min_ch=[0-9]+' | cut -d= -f2 || true); MCCL_MIN_CH="${MCCL_MIN_CH:-4}"
 MCCL_MAX_CH=$(echo "$INJECT_ARGS" | grep -oE 'max_ch=[0-9]+' | cut -d= -f2 || true); MCCL_MAX_CH="${MCCL_MAX_CH:-4}"
+# P2-SW-A：MCCL IB→Socket/SHM fallback（OUTLINE 5A env 代理；禁盲目 P2P_DISABLE）
+IB_DISABLE_V=$(echo "$INJECT_ARGS" | grep -oE 'ib_disable=[01]' | cut -d= -f2 || true); IB_DISABLE_V="${IB_DISABLE_V:-1}"
+# force_socket=1 或 net=Socket：显式 NET/Socket + 关 GDR/VSWITCH（仍不碰 P2P）
+# shm_disable 默认 0（稳）；1 易 MCCL init hang
+FORCE_SOCKET_V=$(echo "$INJECT_ARGS" | grep -oE 'force_socket=[01]' | cut -d= -f2 || true); FORCE_SOCKET_V="${FORCE_SOCKET_V:-0}"
+NET_V=$(echo "$INJECT_ARGS" | grep -oE 'net=[A-Za-z0-9_]+' | cut -d= -f2 || true)
+if [ -n "$NET_V" ] && [ "$(echo "$NET_V" | tr '[:upper:]' '[:lower:]')" = "socket" ]; then
+  FORCE_SOCKET_V=1
+  NET_V="Socket"
+fi
+SOCKET_IF_V=$(echo "$INJECT_ARGS" | grep -oE 'socket_ifname=[A-Za-z0-9_.:-]+' | cut -d= -f2 || true); SOCKET_IF_V="${SOCKET_IF_V:-eth0}"
+SHM_DISABLE_V=$(echo "$INJECT_ARGS" | grep -oE 'shm_disable=[01]' | cut -d= -f2 || true); SHM_DISABLE_V="${SHM_DISABLE_V:-0}"
+# fabric_off=1：关高速辅路（VSWITCH/OPTIC/FABRIC），不设 NET=Socket（a2 Socket hang 后 a3 路径）
+FABRIC_OFF_V=$(echo "$INJECT_ARGS" | grep -oE 'fabric_off=[01]' | cut -d= -f2 || true); FABRIC_OFF_V="${FABRIC_OFF_V:-0}"
 # P1-SW-B：rare shape
 RARE_SEQ_V=$(echo "$INJECT_ARGS" | grep -oE 'rare_seq=[0-9]+' | cut -d= -f2 || true); RARE_SEQ_V="${RARE_SEQ_V:-1536}"
 RARE_EVERY_V=$(echo "$INJECT_ARGS" | grep -oE 'every=[0-9]+' | cut -d= -f2 || true); RARE_EVERY_V="${RARE_EVERY_V:-1}"
 RARE_FRAC_V=$(echo "$INJECT_ARGS" | grep -oE 'frac=[0-9.]+' | cut -d= -f2 || true)
-echo "  inject_parse DUTY=$DUTY SIZE=$SIZE FRAC=$FRAC CPU_LOAD=$CPU_LOAD MCCL=$MCCL_ALGO_V/$MCCL_PROTO_V ch=${MCCL_MIN_CH}-${MCCL_MAX_CH} rare_seq=$RARE_SEQ_V every=$RARE_EVERY_V"
+echo "  inject_parse DUTY=$DUTY SIZE=$SIZE FRAC=$FRAC CPU_LOAD=$CPU_LOAD MCCL=$MCCL_ALGO_V/$MCCL_PROTO_V ch=${MCCL_MIN_CH}-${MCCL_MAX_CH} ib_disable=$IB_DISABLE_V force_socket=$FORCE_SOCKET_V fabric_off=$FABRIC_OFF_V net=${NET_V:-} shm_disable=$SHM_DISABLE_V rare_seq=$RARE_SEQ_V every=$RARE_EVERY_V"
 
 MASTER="${PODS[0]}"
 MASTER_IP="$(pod_ip "$MASTER")"
@@ -104,7 +118,7 @@ fi
 # 无 sidecar 的内联注入（与 8a/hbm inline 同路径）
 is_inline_kind() {
   case "$INJECT_KIND" in
-    mccl_algo|rare_shape|2b|8a|inline_8a) return 0 ;;
+    mccl_algo|mccl_fallback|rare_shape|2b|8a|inline_8a) return 0 ;;
     hbm) [ "${USE_INLINE_HBM:-1}" = "1" ] && return 0 || return 1 ;;
     none) return 0 ;;  # 无注入动作
     *) return 1 ;;
@@ -267,7 +281,7 @@ start_sidecar() {
       pexec "$v" "nohup stress-ng --vm $VM_N --vm-bytes $VM_BYTES --vm-keep --page-in --timeout 600s >'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START stress_vm_n=${VM_N}_bytes=${VM_BYTES}" 2>/dev/null ;;
     stress_io)
       pexec "$v" "mkdir -p '$IO_STRESS_DIR'; nohup fio --name=io_stress --rw=randrw --bs=4k --size=4G --numjobs=16 --iodepth=64 --time_based --runtime=600 --directory='$IO_STRESS_DIR' --group_reporting >'$out/injection.log' 2>&1 & echo SC=\$!; echo SIDECAR_START fio_loud_nj16" 2>/dev/null ;;
-    mccl_algo|rare_shape|2b|8a|inline_8a|none) : ;;
+    mccl_algo|mccl_fallback|rare_shape|2b|8a|inline_8a|none) : ;;
     *) echo "  WARN: unknown INJECT_KIND=$INJECT_KIND" ;;
   esac
 }
@@ -415,8 +429,8 @@ export INLINE_INJECT_STOP=$INJECT_STOP_MEASURE_STEP;
 export INLINE_HBM_MB=${INLINE_HBM_MB:-512};
 export INLINE_HBM_COPIES=${INLINE_HBM_COPIES:-48};"
     fi
-    # P2-SW-B：C0/C1/C2 同开 MCCL_STRESS_MB（大 AllReduce 负载），仅 inject 侧钳通道
-    if [ "$INJECT_KIND" = "mccl_algo" ]; then
+    # P2-SW-B / P2-SW-A：C0/C1/C2 同开 MCCL_STRESS_MB（大 AllReduce 负载）
+    if [ "$INJECT_KIND" = "mccl_algo" ] || [ "$INJECT_KIND" = "mccl_fallback" ]; then
       MCCL_STRESS_MB_V="${MCCL_STRESS_MB:-512}"
       denv="${denv}
 export MCCL_STRESS_MB=$MCCL_STRESS_MB_V;"
@@ -427,6 +441,49 @@ export MCCL_ALGO=$MCCL_ALGO_V;
 export MCCL_PROTO=$MCCL_PROTO_V;
 export MCCL_MIN_NCHANNELS=$MCCL_MIN_CH;
 export MCCL_MAX_NCHANNELS=$MCCL_MAX_CH;"
+    fi
+    # P2-SW-A：仅 inject 侧禁用 IB / 关辅路 / 强制 NET=Socket（不设 P2P_DISABLE）
+    if [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "mccl_fallback" ]; then
+      if [ "$FORCE_SOCKET_V" = "1" ]; then
+        denv="${denv}
+export MCCL_IB_DISABLE=1;
+export NCCL_IB_DISABLE=1;
+export MCCL_NET=Socket;
+export NCCL_NET=Socket;
+export MCCL_SOCKET_IFNAME=${SOCKET_IF_V};
+export NCCL_SOCKET_IFNAME=${SOCKET_IF_V};
+export GLOO_SOCKET_IFNAME=${SOCKET_IF_V};
+export MCCL_NET_GDR_LEVEL=0;
+export NCCL_NET_GDR_LEVEL=0;
+export MCCL_ENABLE_VSWITCH=0;
+export MCCL_DISABLE_OPTIC_LINK=1;
+export MCCL_DISABLE_MULTI_NODE_FABRIC=1;"
+        if [ "$SHM_DISABLE_V" = "1" ]; then
+          denv="${denv}
+export MCCL_SHM_DISABLE=1;
+export NCCL_SHM_DISABLE=1;"
+        fi
+      else
+        # 非 Socket：可选 IB_DISABLE + fabric_off（关高速辅路，保留 SHM）
+        if [ "$IB_DISABLE_V" = "1" ]; then
+          denv="${denv}
+export MCCL_IB_DISABLE=1;
+export NCCL_IB_DISABLE=1;"
+        fi
+        if [ "$FABRIC_OFF_V" = "1" ]; then
+          denv="${denv}
+export MCCL_ENABLE_VSWITCH=0;
+export MCCL_DISABLE_OPTIC_LINK=1;
+export MCCL_DISABLE_MULTI_NODE_FABRIC=1;
+export MCCL_NET_GDR_LEVEL=0;
+export NCCL_NET_GDR_LEVEL=0;"
+        fi
+        if [ "$SHM_DISABLE_V" = "1" ]; then
+          denv="${denv}
+export MCCL_SHM_DISABLE=1;
+export NCCL_SHM_DISABLE=1;"
+        fi
+      fi
     fi
     # P1-SW-B：rare shape / 2b
     if [ "$inj" = "yes" ] && { [ "$INJECT_KIND" = "rare_shape" ] || [ "$INJECT_KIND" = "2b" ]; }; then
@@ -453,6 +510,17 @@ export RARE_SHAPE_FRAC=$RARE_FRAC_V;"
       if [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "mccl_algo" ]; then
         echo "  mccl_algo armed (algo=$MCCL_ALGO_V proto=$MCCL_PROTO_V ch=${MCCL_MIN_CH}-${MCCL_MAX_CH})"
         pexec "$MASTER" "printf '%s\n' 'INLINE_INJECT kind=mccl_algo' 'SIDECAR_START kind=mccl_algo' \"MCCL_ALGO=$MCCL_ALGO_V\" \"MCCL_PROTO=$MCCL_PROTO_V\" \"MCCL_MIN_NCHANNELS=$MCCL_MIN_CH\" \"MCCL_MAX_NCHANNELS=$MCCL_MAX_CH\" >'$out/injection.log'" 2>/dev/null || true
+      elif [ "$inj" = "yes" ] && [ "$INJECT_KIND" = "mccl_fallback" ]; then
+        if [ "$FORCE_SOCKET_V" = "1" ]; then
+          echo "  mccl_fallback armed (NET=Socket force_socket=1 IB_DISABLE=1 shm_disable=$SHM_DISABLE_V GDR=0 VSWITCH=0 if=${SOCKET_IF_V} stress_mb=${MCCL_STRESS_MB:-512}; no P2P_DISABLE)"
+          pexec "$MASTER" "printf '%s\n' 'INLINE_INJECT kind=mccl_fallback' 'SIDECAR_START kind=mccl_fallback' 'MCCL_NET=Socket' 'NCCL_NET=Socket' 'MCCL_IB_DISABLE=1' 'NCCL_IB_DISABLE=1' \"MCCL_SHM_DISABLE=$SHM_DISABLE_V\" 'MCCL_NET_GDR_LEVEL=0' 'MCCL_ENABLE_VSWITCH=0' \"MCCL_SOCKET_IFNAME=${SOCKET_IF_V}\" \"MCCL_STRESS_MB=${MCCL_STRESS_MB:-512}\" 'P2P_DISABLE=0' >'$out/injection.log'" 2>/dev/null || true
+        elif [ "$FABRIC_OFF_V" = "1" ]; then
+          echo "  mccl_fallback armed (fabric_off=1 IB_DISABLE=$IB_DISABLE_V VSWITCH=0 OPTIC/FABRIC off GDR=0 shm_disable=$SHM_DISABLE_V stress_mb=${MCCL_STRESS_MB:-512}; no NET=Socket; no P2P_DISABLE)"
+          pexec "$MASTER" "printf '%s\n' 'INLINE_INJECT kind=mccl_fallback' 'SIDECAR_START kind=mccl_fallback' \"MCCL_IB_DISABLE=$IB_DISABLE_V\" \"NCCL_IB_DISABLE=$IB_DISABLE_V\" 'MCCL_ENABLE_VSWITCH=0' 'MCCL_DISABLE_OPTIC_LINK=1' 'MCCL_DISABLE_MULTI_NODE_FABRIC=1' 'MCCL_NET_GDR_LEVEL=0' \"MCCL_SHM_DISABLE=$SHM_DISABLE_V\" \"MCCL_STRESS_MB=${MCCL_STRESS_MB:-512}\" 'P2P_DISABLE=0' 'NET_SOCKET=0' >'$out/injection.log'" 2>/dev/null || true
+        else
+          echo "  mccl_fallback armed (IB_DISABLE=$IB_DISABLE_V stress_mb=${MCCL_STRESS_MB:-512}; no P2P_DISABLE)"
+          pexec "$MASTER" "printf '%s\n' 'INLINE_INJECT kind=mccl_fallback' 'SIDECAR_START kind=mccl_fallback' \"MCCL_IB_DISABLE=$IB_DISABLE_V\" \"NCCL_IB_DISABLE=$IB_DISABLE_V\" \"MCCL_STRESS_MB=${MCCL_STRESS_MB:-512}\" 'P2P_DISABLE=0' >'$out/injection.log'" 2>/dev/null || true
+        fi
       elif [ "$inj" = "yes" ] && { [ "$INJECT_KIND" = "rare_shape" ] || [ "$INJECT_KIND" = "2b" ]; }; then
         echo "  rare_shape/2b armed (seq=$RARE_SEQ_V every=$RARE_EVERY_V victim=L$SIDECAR_LOCAL_RANK)"
         pexec "$MASTER" "printf '%s\n' 'INLINE_INJECT kind=2b' 'SIDECAR_START kind=rare_shape' \"RARE_SHAPE_SEQ=$RARE_SEQ_V\" \"RARE_SHAPE_EVERY=$RARE_EVERY_V\" \"INLINE_VICTIM_LOCAL_RANK=$SIDECAR_LOCAL_RANK\" >'$out/injection.log'" 2>/dev/null || true

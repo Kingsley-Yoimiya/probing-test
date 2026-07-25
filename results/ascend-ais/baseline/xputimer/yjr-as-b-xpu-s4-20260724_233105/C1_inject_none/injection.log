@@ -1,0 +1,4 @@
+stress-ng: info:  [18175] setting to a 900 second (15 mins, 0.00 secs) run per stressor
+stress-ng: info:  [18175] dispatching hogs: 256 cpu
+stress-ng: info:  [18175] successful run completed in 0.00s
+SIDECAR_STOP

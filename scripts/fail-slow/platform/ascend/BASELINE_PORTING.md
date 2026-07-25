@@ -54,4 +54,5 @@ MetaX 路径（真相源）：
 
 - 不把沐曦 `libmcclprobe.so` / `libxpu_timer_metax.so` 直接拷到昇腾当「适配完成」。  
 - 不在共享 `score_dlevel_*.py` 里写死昇腾窗/rank 答案。  
-- 不为昇腾新建第二套 ledger 仓；只在 ledger 加 `platform=ascend` 行。
+- 华为 rules/ledger 在 `project/probing-huawei/docs/fail-slow/`（与沐曦台账分开）；Agent 边界见同目录 `agents/`。  
+- 未穷尽接入前不下 `ENV-BLOCKED`；采集成功 ≠ 检测成功（两轴分记，见 `agents/BASELINE_COMMON.md`）。

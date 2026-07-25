@@ -2,7 +2,8 @@
 
 > 共享编排仍在 `scripts/fail-slow/{run_case_abc,run_case_pipeline_v4}.sh`。  
 > 本目录只放 **Ascend/HCCL/NPU** 专用：baseline 构建、env、采集旁路、镜像片段。  
-> 结果落盘：**禁止**写 `results/muxi-h3c/` → 用 myportal `results/ascend-ais/<run_id>/`。
+> 结果落盘：**禁止**写沐曦结果树。本机默认用 `probing-huawei/results/ascend-ais/<run_id>/`
+>（`source probing-huawei/scripts/fail-slow/env.sh` 的 `LOCAL_RESULT_ROOT_BASE`）；**不依赖 myportal**。
 
 ## 状态
 
@@ -39,4 +40,4 @@
 
 ## 开跑顺序（接入后）
 
-见 myportal：`plans/fail-slow-ascend/SMOKE_CHECKLIST.md`。
+Smoke / 身份：见 `probing-huawei/docs/fail-slow/{SHARE,IDENTITY}.md`。

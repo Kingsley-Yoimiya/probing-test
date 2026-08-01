@@ -107,7 +107,30 @@ case "$CASE_ID" in
     MODE="${MODE:-host_bound}"
     ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
     ;;
-  *) echo "unsupported CASE_ID=$CASE_ID (P1-EXT-A/B, P3-EXT-A/B/C, P3-SW-A/B)" >&2; exit 2 ;;
+  P3-SW-C|8c)
+    CASE="P3-SW-C"; INJECT_KIND="8c"
+    INJECT_ARGS="${INJECT_ARGS:-}"
+    MODE="${MODE:-host_bound}"
+    ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+    # Loud 冻结 8c_loud3：覆盖 pod 上 sidecar_inject_v2.py（与 bite 一致）
+    _SC_LOUD="$PARENT/cases/p1hwb_p3swc/sidecar_inject_v2_8c_loud.py"
+    if [ -f "$_SC_LOUD" ]; then
+      echo "P3-SW-C: sync sidecar_inject_v2_8c_loud.py → sidecar_inject_v2.py"
+      IFS=',' read -r -a _pods <<< "$PODS"
+      for _p in "${_pods[@]}"; do
+        kubectl --kubeconfig="$KUBECONFIG" -n "$NS" exec -i "$_p" -- \
+          bash -c "cat > $LOCAL_CODE/sidecar_inject_v2.py" < "$_SC_LOUD" || true
+      done
+    else
+      echo "WARN: missing $_SC_LOUD; using pod sidecar as-is" >&2
+    fi
+    # 导出 dose knobs（默认 = loud3 冻结）
+    export SIDECAR_8C_WORKERS_FRAC="${SIDECAR_8C_WORKERS_FRAC:-1.0}"
+    export SIDECAR_8C_MB="${SIDECAR_8C_MB:-1}"
+    export SIDECAR_8C_LEAK_EVERY="${SIDECAR_8C_LEAK_EVERY:-1.0}"
+    export SIDECAR_8C_MAX_CHUNKS="${SIDECAR_8C_MAX_CHUNKS:-64}"
+    ;;
+  *) echo "unsupported CASE_ID=$CASE_ID (P1-EXT-A/B, P3-EXT-A/B/C, P3-SW-A/B/C)" >&2; exit 2 ;;
 esac
 
 run_config() {
@@ -169,6 +192,7 @@ for cfg in "${RUN_CFGS[@]}"; do
     C3_greyhound) gid=3 ;;
     C4_xputimer) gid=4 ;;
     C5_flight_recorder) gid=5 ;;
+    C6_dynolog) gid=6 ;;
     *) gid=0 ;;
   esac
   # C2：可选闸门——C1 未达标则跳过，避免无效注入浪费 Probing 轮

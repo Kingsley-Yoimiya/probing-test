@@ -1,43 +1,88 @@
 #!/usr/bin/env bash
-# P1-HW-B Loud contrast on yysong-worker-2: INLINE HBM ramp copies + XPUTimer preload.
-# Frozen dose (dose_recipes calibrated): inline_hbm_mb=512,inline_hbm_copies=6,
-#   inline_hbm_copies_max=48,ramp=1
+# P1-HW-B contrast on yysong-worker-2: INLINE HBM ramp copies + XPUTimer preload.
+# dose=loud (default): mb=512,copies=6→48,ramp=1；thr=1.3；金标≈1.57
+# dose=quiet:          mb=320,copies=5→30,ramp=1；thr=1.15；金标≈1.219（Loud 冻结规则只复测）
+# dose=masked:         mb=256,copies=4→24,ramp=1；thr=1.05；金标≈1.129（Loud 冻结规则只复测）
 # Window [100,300]; mode=gpu_bound; victim local_rank=7.
-# Gold Probing C1/C0≈1.57; accept_min_ratio=1.3.
+# Verdict: 分列自主 hang/slow flags vs 跨-run coll 中位比；勿误标 autonomous。
+# Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 CODE="${CODE:-/data/yinjinrun.p-huawei/lab-workspace/xputimer}"
 SO="${SO:-$CODE/libxpu_timer_ascend.so}"
 TBP="${TBP:-/tmp/tbp_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p1-hw-b-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p1-hw-b-quiet-${TS}}"
+  HBM_MB="${HBM_MB:-320}"
+  HBM_COPIES="${HBM_COPIES:-5}"
+  HBM_COPIES_MAX="${HBM_COPIES_MAX:-30}"
+  HBM_RAMP="${HBM_RAMP:-1}"
+  CASE_REF="${CASE_REF:-20260726_005203-yjr-as-c-p1-hw-b-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.219}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30250}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30251}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p1-hw-b-masked-${TS}}"
+  HBM_MB="${HBM_MB:-256}"
+  HBM_COPIES="${HBM_COPIES:-4}"
+  HBM_COPIES_MAX="${HBM_COPIES_MAX:-24}"
+  HBM_RAMP="${HBM_RAMP:-1}"
+  CASE_REF="${CASE_REF:-20260726_011501-yjr-as-c-p1-hw-b-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.129}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30252}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30253}"
+else
+  RUN="${RUN:-contrast-p1-hw-b-${TS}}"
+  HBM_MB="${HBM_MB:-512}"
+  HBM_COPIES="${HBM_COPIES:-6}"
+  HBM_COPIES_MAX="${HBM_COPIES_MAX:-48}"
+  HBM_RAMP="${HBM_RAMP:-1}"
+  CASE_REF="${CASE_REF:-20260725_142359-yjr-as-c-p1-hw-b-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.57}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30240}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30241}"
+fi
+# Prefer AFS results when writable; fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-HBM_MB="${HBM_MB:-512}"
-HBM_COPIES="${HBM_COPIES:-6}"
-HBM_COPIES_MAX="${HBM_COPIES_MAX:-48}"
-HBM_RAMP="${HBM_RAMP:-1}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30240}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30241}"
-# Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong). Force local IP.
 _local_ip() {
-  if command -v hostname >/dev/null 2>&1; then
-    hostname -I 2>/dev/null | awk '{print $1}'
-  elif command -v ip >/dev/null 2>&1; then
-    ip -4 route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}'
-  else
-    echo 127.0.0.1
+  local ip=""
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)"
+    [[ -z "$ip" ]] && ip="$(ip -4 route get 1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
   fi
+  if [[ -z "$ip" ]] && command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+  echo "${ip:-127.0.0.1}"
 }
 MASTER_ADDR="${FORCE_MASTER_ADDR:-$(_local_ip)}"
-CASE_REF="${CASE_REF:-20260725_142359-yjr-as-c-p1-hw-b-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
 
+# Ascend libs (bashrc sources these on interactive -lc; nohup/non-login needs explicit)
+set +u
+export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:${LD_LIBRARY_PATH:-}
+# shellcheck disable=SC1091
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# shellcheck disable=SC1091
+[[ -f /usr/local/Ascend/nnal/atb/set_env.sh ]] && source /usr/local/Ascend/nnal/atb/set_env.sh
+set -u
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
 export PYTHONUNBUFFERED=1
@@ -45,7 +90,7 @@ export PATH=/root/miniconda3/envs/llm_test/bin:${PATH}
 export GLOO_SOCKET_IFNAME=${GLOO_SOCKET_IFNAME:-eth0}
 export HCCL_CONNECT_TIMEOUT=${HCCL_CONNECT_TIMEOUT:-1800}
 export HOST_BOUND_MATMUL=${HOST_BOUND_MATMUL:-768}
-export CKPT_DIR=/data/yinjinrun.p-huawei/probe-bundle/ckpt
+export CKPT_DIR="${CKPT_DIR:-/data/yinjinrun.p-huawei/probe-bundle/ckpt}"
 export PROBING=0
 unset PROBING_TORCH_PROFILING PROBING_GPU INLINE_INJECT 2>/dev/null || true
 
@@ -57,19 +102,19 @@ pkill -9 -f '[t]orchrun' 2>/dev/null || true
 pkill -9 -x stress-ng 2>/dev/null || true
 sleep 1
 
-mkdir -p "$DUMP_ROOT"
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN"
+mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} mb=${HBM_MB} copies=${HBM_COPIES}→${HBM_COPIES_MAX} ramp=${HBM_RAMP}"
 echo "$RUN" > /tmp/xpu_p1hwb_run.txt
 echo "$DUMP_ROOT" > /tmp/xpu_p1hwb_dump.txt
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P1-HW-B
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-2
+pod: ${HOLD_POD}
 pool: pool-xpu
 mode: gpu_bound
 inject_kind: inline_hbm_ramp
@@ -84,7 +129,7 @@ tool: XPUTimer
 label_prefix: yjr-as-b-xpu
 script: platform/ascend/xputimer/contrast_p1hwb.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
-gold_step_ratio: 1.57
+gold_step_ratio: ${GOLD_STEP_RATIO}
 EOF
 
 run_arm() {
@@ -98,7 +143,6 @@ run_arm() {
   export XPU_TIMER_HANG_TIMEOUT_MS=60000
   export XPU_TIMER_INJECT_STALL_MS=0
 
-  # clear inline inject for C0; enable ramp HBM for C1
   unset INLINE_INJECT INLINE_VICTIM_LOCAL_RANK INLINE_INJECT_START INLINE_INJECT_STOP \
         INLINE_HBM_MB INLINE_HBM_COPIES INLINE_HBM_COPIES_MAX INLINE_HBM_RAMP \
         INLINE_CUBE_SIZE INLINE_CUBE_MM 2>/dev/null || true
@@ -116,6 +160,7 @@ run_arm() {
   echo "========== $arm port=$port inject=$do_inject hbm=${HBM_MB}MB×${HBM_COPIES}→${HBM_COPIES_MAX} ramp=${HBM_RAMP} =========="
   rm -f "$out/node_0.done" "$out/node_0.fail"
   (
+    set +e
     LD_PRELOAD="$SO" \
     /root/miniconda3/envs/llm_test/bin/torchrun --nnodes=1 --nproc_per_node="$NPROC" --node_rank=0 \
       --master_addr="$MASTER_ADDR" --master_port="$port" \
@@ -125,6 +170,7 @@ run_arm() {
       --out-dir="$out/ranks" >"$out/node_0.log" 2>&1
     rc=$?
     if [[ $rc -eq 0 ]]; then touch "$out/node_0.done"; else echo $rc >"$out/node_0.fail"; fi
+    exit 0
   ) &
   local train_pid=$!
 
@@ -183,7 +229,6 @@ run_arm C0_baseline "$MASTER_PORT_C0" 0
 run_arm C1_inject_none "$MASTER_PORT_C1" 1
 
 VERDICT_PY="${VERDICT_PY:-$CODE/s4_verdict.py}"
-# exit 2 = no bite (still DONE); only fail if verdict writer itself crashes
 set +e
 python3 "$VERDICT_PY" \
   --c0 "$DUMP_ROOT/C0_baseline/xputimer" \
@@ -192,7 +237,8 @@ python3 "$VERDICT_PY" \
   --ranks-c1 "$DUMP_ROOT/C1_inject_none/ranks" \
   --case-id P1-HW-B \
   --case-ref "$CASE_REF" \
-  --dose-desc "INLINE hbm ramp mb=${HBM_MB} copies=${HBM_COPIES}→${HBM_COPIES_MAX} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈1.57" \
+  --dose "$DOSE" \
+  --dose-desc "INLINE hbm ramp mb=${HBM_MB} copies=${HBM_COPIES}→${HBM_COPIES_MAX} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈${GOLD_STEP_RATIO}" \
   --accept-min-ratio "$ACCEPT_MIN_RATIO" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"

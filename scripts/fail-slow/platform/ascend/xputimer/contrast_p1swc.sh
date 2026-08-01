@@ -1,35 +1,70 @@
 #!/usr/bin/env bash
-# P1-SW-C Loud contrast on yysong-worker-2: INLINE 2c compile spike + XPUTimer preload.
-# Frozen dose (dose_recipes calibrated):
-#   n=1024,every=1,fallback_s=0.25
+# P1-SW-C contrast on yysong-worker-2: INLINE 2c compile spike + XPUTimer preload.
+# dose=loud (default): n=1024,every=1,fallback_s=0.25；thr=1.3；金标 tip max≈4.63
+# dose=quiet:          n=768,every=4,fallback_s=0.1；thr=1.15；金标 tip max≈2.61（Loud 冻结规则只复测）
+# dose=masked:         n=768,every=4,fallback_s=0.05；thr=1.05；金标 tip max≈2.61（formal@025116）
 # Window [100,300]; mode=gpu_bound; victim local_rank=7.
-# Tip narrative: Probing tip max=4.63, median blind; dose_check may use tip/max or step.
+# Tip narrative: median 常盲；dose_check 以 tip/max 对齐金标，勿只看 median.
+# Verdict: 分列自主 hang/slow flags vs 跨-run coll 中位比；自主=0 → cross_run_contrast.
 # Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 CODE="${CODE:-/data/yinjinrun.p-huawei/lab-workspace/xputimer}"
 SO="${SO:-$CODE/libxpu_timer_ascend.so}"
 TBP="${TBP:-/tmp/tbp_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p1-sw-c-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p1-sw-c-quiet-${TS}}"
+  DOSE_N="${INLINE_2C_N:-768}"
+  DOSE_EVERY="${INLINE_2C_EVERY:-4}"
+  DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.1}"
+  CASE_REF="${CASE_REF:-20260726_021606-yjr-as-c-p1-sw-c-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_TIP_MAX="${GOLD_TIP_MAX:-2.61}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30300}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30301}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p1-sw-c-masked-${TS}}"
+  DOSE_N="${INLINE_2C_N:-768}"
+  DOSE_EVERY="${INLINE_2C_EVERY:-4}"
+  DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.05}"
+  CASE_REF="${CASE_REF:-20260726_025116-yjr-as-c-p1-sw-c-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_TIP_MAX="${GOLD_TIP_MAX:-2.61}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30302}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30303}"
+else
+  RUN="${RUN:-contrast-p1-sw-c-${TS}}"
+  DOSE_N="${INLINE_2C_N:-1024}"
+  DOSE_EVERY="${INLINE_2C_EVERY:-1}"
+  DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_121105-yjr-as-c-p1-sw-c-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_TIP_MAX="${GOLD_TIP_MAX:-4.63}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30290}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30291}"
+fi
+# Prefer AFS results when writable; fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-DOSE_N="${INLINE_2C_N:-1024}"
-DOSE_EVERY="${INLINE_2C_EVERY:-1}"
-DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
 # Keep DOSE_* immutable for set -u; only export INLINE_2C_* on C1.
 INLINE_2C_N="$DOSE_N"
 INLINE_2C_EVERY="$DOSE_EVERY"
 INLINE_2C_FALLBACK_S="$DOSE_FALLBACK_S"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30290}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30291}"
 _local_ip() {
-  # Prefer eth0 / route src; avoid inheriting hold-job MASTER_ADDR (master-0).
   local ip=""
   if command -v ip >/dev/null 2>&1; then
     ip="$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)"
@@ -38,13 +73,18 @@ _local_ip() {
   if [[ -z "$ip" ]] && command -v hostname >/dev/null 2>&1; then
     ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   fi
-  # Single-node torchrun accepts loopback; never use yysong-master-0 DNS.
   echo "${ip:-127.0.0.1}"
 }
 MASTER_ADDR="${FORCE_MASTER_ADDR:-$(_local_ip)}"
-CASE_REF="${CASE_REF:-20260725_121105-yjr-as-c-p1-sw-c-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
 
+# Ascend libs (bashrc sources these on interactive -lc; nohup/non-login needs explicit)
+set +u
+export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:${LD_LIBRARY_PATH:-}
+# shellcheck disable=SC1091
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# shellcheck disable=SC1091
+[[ -f /usr/local/Ascend/nnal/atb/set_env.sh ]] && source /usr/local/Ascend/nnal/atb/set_env.sh
+set -u
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
 export PYTHONUNBUFFERED=1
@@ -67,18 +107,18 @@ sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S}"
 echo "$RUN" > /tmp/xpu_p1swc_run.txt
 echo "$DUMP_ROOT" > /tmp/xpu_p1swc_dump.txt
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P1-SW-C
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-2
+pod: ${HOLD_POD}
 pool: pool-xpu
 mode: gpu_bound
 inject_kind: inline_2c
@@ -93,7 +133,8 @@ tool: XPUTimer
 label_prefix: yjr-as-b-xpu
 script: platform/ascend/xputimer/contrast_p1swc.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
-tip_note: "Probing tip max=4.63 median blind; dose_check may use tip/max or step_ms"
+gold_tip_max: ${GOLD_TIP_MAX}
+tip_note: "Probing tip max=${GOLD_TIP_MAX} median blind; dose_check must use tip/max (not median alone)"
 EOF
 
 run_arm() {
@@ -126,6 +167,7 @@ run_arm() {
   echo "========== $arm port=$port inject=$do_inject 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} =========="
   rm -f "$out/node_0.done" "$out/node_0.fail"
   (
+    set +e
     LD_PRELOAD="$SO" \
     /root/miniconda3/envs/llm_test/bin/torchrun --nnodes=1 --nproc_per_node="$NPROC" --node_rank=0 \
       --master_addr="$MASTER_ADDR" --master_port="$port" \
@@ -135,6 +177,7 @@ run_arm() {
       --out-dir="$out/ranks" >"$out/node_0.log" 2>&1
     rc=$?
     if [[ $rc -eq 0 ]]; then touch "$out/node_0.done"; else echo $rc >"$out/node_0.fail"; fi
+    exit 0
   ) &
   local train_pid=$!
 
@@ -160,7 +203,7 @@ run_arm() {
       sleep 2; e=$((e + 2))
     done
     if [[ $e -ge 2400 ]]; then echo "step ${INJECT_START} timeout"; return 1; fi
-    grep -E "INLINE_2C|SIDECAR" "$out/node_0.log" 2>/dev/null | head -40 >"$out/injection.log" || true
+    grep -E "INLINE_2C|SIDECAR|SPIKE" "$out/node_0.log" 2>/dev/null | head -40 >"$out/injection.log" || true
     echo "SIDECAR_START kind=inline_2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} victim=${VICTIM_LOCAL}" >>"$out/injection.log"
   fi
 
@@ -199,7 +242,8 @@ python3 "$VERDICT_PY" \
   --ranks-c1 "$DUMP_ROOT/C1_inject_none/ranks" \
   --case-id P1-SW-C \
   --case-ref "$CASE_REF" \
-  --dose-desc "INLINE 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]" \
+  --dose "$DOSE" \
+  --dose-desc "INLINE 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold tip max≈${GOLD_TIP_MAX}" \
   --accept-min-ratio "$ACCEPT_MIN_RATIO" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"
@@ -207,7 +251,7 @@ vrc=$?
 set -e
 test -f "$DUMP_ROOT/CONTRAST_VERDICT.md" || { echo "missing VERDICT rc=$vrc"; exit 1; }
 
-# Tip / max dose_check appendix (P1-SW-C: median often blind; Probing gold tip max=4.63)
+# Tip / max dose_check appendix (P1-SW-C: median often blind; align tip max to Probing gold)
 TIP_PY="${TIP_PY:-$CODE/tip_dose_check_p1swc.py}"
 if [[ -f "$TIP_PY" ]]; then
   python3 "$TIP_PY" \
@@ -217,6 +261,7 @@ if [[ -f "$TIP_PY" ]]; then
     --window-start "$INJECT_START" \
     --window-stop "$INJECT_STOP" \
     --accept-min-max-ratio 2.5 \
+    --gold-tip-max "${GOLD_TIP_MAX:-4.63}" \
     --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json" \
     --verdict "$DUMP_ROOT/CONTRAST_VERDICT.md" || true
 fi

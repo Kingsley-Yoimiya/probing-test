@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """P1-SW-C tip/max dose_check appendix for Greyhound contrast.
 
-Probing gold: tip max≈4.63, median often blind (~1.0).
+Probing gold tip max depends on dose (loud≈4.63, quiet≈2.61); median often blind (~1.0).
 Augments CONTRAST_SUMMARY.json + CONTRAST_VERDICT.md with victim tip metrics;
 does not change detect_ok (Greyhound rule path stays coll OR Rbeast).
 """
@@ -54,6 +54,8 @@ def main() -> int:
     ap.add_argument("--window-stop", type=int, default=300)
     ap.add_argument("--accept-min-max-ratio", type=float, default=2.5)
     ap.add_argument("--accept-min-p99-ratio", type=float, default=1.5)
+    ap.add_argument("--accept-min-med-ratio", type=float, default=1.3)
+    ap.add_argument("--gold-tip-max", type=float, default=4.63)
     ap.add_argument("--summary", required=True)
     ap.add_argument("--verdict", required=True)
     args = ap.parse_args()
@@ -79,7 +81,7 @@ def main() -> int:
     max_r = max1 / max(1e-9, max0)
     tip_step, tip_ms = max(c1, key=lambda t: t[1])
     tip_pass = (
-        (med_r == med_r and med_r >= 1.3)
+        (med_r == med_r and med_r >= args.accept_min_med_ratio)
         or (p99_r == p99_r and p99_r >= args.accept_min_p99_ratio)
         or (max_r == max_r and max_r >= args.accept_min_max_ratio)
     )
@@ -96,7 +98,11 @@ def main() -> int:
         "tip_step": tip_step,
         "tip_step_ms": tip_ms,
         "pass": bool(tip_pass),
-        "note": "P1-SW-C tip/max gate; median often blind; Probing gold tip max≈4.63",
+        "gold_tip_max": args.gold_tip_max,
+        "note": (
+            f"P1-SW-C tip/max gate; median often blind; "
+            f"Probing gold tip max≈{args.gold_tip_max}"
+        ),
         "window": [args.window_start, args.window_stop],
     }
 
@@ -123,8 +129,9 @@ def main() -> int:
         f"- p99 C1/C0 = {p99_r:.3f}",
         f"- max C1/C0 = {max_r:.3f} （C1 max={max1:.1f} @step {tip_step}；C0 max={max0:.1f}）",
         f"- tip gate → {'PASS' if tip_pass else 'FAIL'} "
-        f"(med≥1.3 OR p99≥{args.accept_min_p99_ratio} OR max≥{args.accept_min_max_ratio})",
-        f"- Probing gold tip max≈4.63；本对照 tip max_ratio={max_r:.3f}",
+        f"(med≥{args.accept_min_med_ratio} OR p99≥{args.accept_min_p99_ratio} "
+        f"OR max≥{args.accept_min_max_ratio})",
+        f"- Probing gold tip max≈{args.gold_tip_max}；本对照 tip max_ratio={max_r:.3f}",
         "",
     ]
     vp = Path(args.verdict)

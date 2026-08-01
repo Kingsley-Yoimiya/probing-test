@@ -357,7 +357,8 @@ config_denv() {   # $1=cfg → echo detect_env
         echo "export PROBING=2; unset PROBING_TORCH_PROFILING; export PROBING_GPU=on; export PROBING_GPU_SAMPLE_MS=1000;"
       fi
       ;;
-    C3_greyhound) echo "export LD_PRELOAD=$CODE_DIR/greyhound/libmcclprobe.so;" ;;
+    # MetaX collect-min：LD_PRELOAD mccl* + JSONL dump（路径在主循环按 $out 补全）
+    C3_greyhound) echo "export LD_PRELOAD=$CODE_DIR/greyhound/libmcclprobe.so; export GREYHOUND_DEBUG=\${GREYHOUND_DEBUG:-1};" ;;
     C4_xputimer)  echo "export LD_PRELOAD=$CODE_DIR/xputimer/libxpu_timer_metax.so;" ;;
     # Flight Recorder：环形缓冲；dump 需训练侧/进程退出时落盘。触发协议见 ledger（本战役标 oracle 若人工开窗）。
     C5_flight_recorder)
@@ -410,6 +411,24 @@ export INLINE_2C_EVERY=${INLINE_2C_EVERY:-1};
 export INLINE_2C_N=${INLINE_2C_N:-1024};
 export INLINE_2C_FALLBACK_S=${INLINE_2C_FALLBACK_S:-0.2};
 export TORCHINDUCTOR_CACHE_DIR=/tmp/p1c_inductor_cache;"
+    fi
+    # Greyhound collect-min dump 路径（与 p1swa pipeline_local 对齐）
+    if [ "$cfg" = "C3_greyhound" ]; then
+      denv="${denv}
+mkdir -p '$out/greyhound';
+export GREYHOUND_DUMP='$out/greyhound/mcclprobe.collect.jsonl';
+export GREYHOUND_STUB_MARKER='$out/greyhound/loaded.marker';"
+    fi
+    # XPUTimer MetaX：prom/jsonl 落到本轮 out/xputimer（勿混挂 greyhound）
+    if [ "$cfg" = "C4_xputimer" ]; then
+      denv="${denv}
+mkdir -p '$out/xputimer';
+export XPU_TIMER_ENABLE=1;
+export XPU_TIMER_DUMP_DIR='$out/xputimer';
+export XPU_TIMER_DUMP_INTERVAL_S=\${XPU_TIMER_DUMP_INTERVAL_S:-2};
+export XPU_TIMER_HANG_TIMEOUT_MS=\${XPU_TIMER_HANG_TIMEOUT_MS:-60000};
+export XPU_TIMER_SLOW_REPORT_US=\${XPU_TIMER_SLOW_REPORT_US:-0};
+export XPU_TIMER_LAUNCH_SAMPLE=\${XPU_TIMER_LAUNCH_SAMPLE:-32};"
     fi
     # P1-EXT-B：外挂 hbm 在 MetaX 上反复咬空 → 默认内联 D2D（USE_INLINE_HBM=0 可退回 sidecar）
     USE_INLINE_HBM="${USE_INLINE_HBM:-1}"

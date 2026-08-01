@@ -101,7 +101,7 @@ echo "  inject_parse DUTY=$DUTY SIZE=$SIZE FRAC=$FRAC CPU_LOAD=$CPU_LOAD MCCL=$M
 MASTER="${PODS[0]}"
 MASTER_IP="$(pod_ip "$MASTER")"
 [ -z "$MASTER_IP" ] && { echo "FATAL: cannot resolve master IP for $MASTER"; exit 2; }
-BASE_PORT=$(( 30000 + GROUP_ID * 100 ))
+BASE_PORT="${BASE_PORT:-$(( 30000 + GROUP_ID * 100 ))}"
 OUT_BASE="$RUN_DIR/$CASE"
 
 echo "╔══════════════════════════════════════════════╗"
@@ -231,17 +231,17 @@ LAUNCHER
 }
 
 wait_warmup() {
-  local out="$1" e=0
-  while [ $e -lt 180 ]; do
+  local out="$1" e=0 budget="${WAIT_WARMUP_S:-180}"
+  while [ $e -lt "$budget" ]; do
     if pexec "$MASTER" "test -f '$out/ranks/warmup_done'" 2>/dev/null; then echo "  warmup ok(${e}s)"; return 0; fi
     sleep 5; e=$((e+5))
   done
-  echo "  warmup timeout"; return 0
+  echo "  warmup timeout(${e}s/${budget}s)"; return 0
 }
 
 wait_measure_step() {
-  local out="$1" target="$2" e=0
-  while [ "$e" -lt 1800 ]; do
+  local out="$1" target="$2" e=0 budget="${WAIT_MEASURE_S:-1800}"
+  while [ "$e" -lt "$budget" ]; do
     if pexec "$MASTER" "test -f '$out/ranks/step_${target}.marker'" 2>/dev/null; then
       echo "  measure step $target reached (${e}s)"
       return 0
@@ -252,7 +252,7 @@ wait_measure_step() {
     fi
     sleep 5; e=$((e+5))
   done
-  echo "  measure step $target timeout"
+  echo "  measure step $target timeout(${e}s/${budget}s)"
   return 1
 }
 
@@ -322,8 +322,14 @@ stop_sidecar() {
 }
 
 wait_done() {
+  # WAIT_DONE_S：极慢剂量（如 P2-SW-A fabric_off ~9s/step）可放宽到 7200；默认 900
+  # HEAL_*：仅在 torchrun 已退且 jsonl 够行数时补 done；torchrun 仍活绝不 heal-fail（勿误杀）
   local out="$1" stop_on_marker="${2:-0}" stopped=0 e=0
-  while [ $e -lt 900 ]; do
+  local budget="${WAIT_DONE_S:-900}"
+  local heal_after="${HEAL_AFTER_S:-600}"
+  local need_steps="${ITERS:-500}"
+  local need_lines=$((need_steps * NPROC / 2))
+  while [ $e -lt "$budget" ]; do
     local d=0 f=0
     if [ "$stop_on_marker" = "1" ] && [ "$stopped" = "0" ] &&
       pexec "$MASTER" "test -f '$out/ranks/step_${INJECT_STOP_MEASURE_STEP}.marker'" 2>/dev/null; then
@@ -338,6 +344,14 @@ wait_done() {
           d=$((d + 1))
         elif pexec "${PODS[$n]}" "test -f '$out/node_${n}.fail'" >/dev/null 2>&1; then
           f=$((f + 1))
+        elif [ "$e" -ge "$heal_after" ]; then
+          # soft heal：进程已退 + jsonl 够 → 补 done；进程仍活 → 跳过（慢剂量正常）
+          if pexec "${PODS[$n]}" "pgrep -f '[t]orchrun|/tmp/[t]bp.py' >/dev/null" >/dev/null 2>&1; then
+            :
+          elif pexec "${PODS[$n]}" "n=\$(wc -l < '$out/ranks/rank_0000.jsonl' 2>/dev/null || echo 0); [ \"\${n:-0}\" -ge $need_lines ] && touch '$out/node_${n}.done'" >/dev/null 2>&1; then
+            d=$((d + 1))
+            echo "  heal: marked node_${n}.done (jsonl>=${need_lines}, torchrun gone)"
+          fi
         fi
         n=$((n + 1))
       done
@@ -353,8 +367,8 @@ wait_done() {
       echo "  FAIL marker seen (f=$f)"
       return 1
     fi
-    if [ $((e % 30)) -eq 0 ]; then
-      echo "  waiting done… d=${d:-0}/$NNODES t=${e}s"
+    if [ $((e % 60)) -eq 0 ]; then
+      echo "  waiting done… d=${d:-0}/$NNODES t=${e}s/${budget}s"
     fi
     sleep 5; e=$((e+5))
   done
@@ -373,8 +387,8 @@ config_denv() {
         echo "export PROBING=2; unset PROBING_TORCH_PROFILING; export PROBING_GPU=on; export PROBING_GPU_SAMPLE_MS=1000;"
       fi
       ;;
-    C3_greyhound) echo "export LD_PRELOAD=$CODE_DIR/greyhound/libmcclprobe.so;" ;;
-    C4_xputimer)  echo "export LD_PRELOAD=$CODE_DIR/xputimer/libxpu_timer_metax.so;" ;;
+    C3_greyhound) echo "export LD_PRELOAD=\${FS_GREYHOUND_SO:-/workspace/probe-bundle/greyhound/libmcclprobe.so}; export GREYHOUND_DEBUG=\${GREYHOUND_DEBUG:-1};" ;;
+    C4_xputimer)  echo "export LD_PRELOAD=\${FS_XPUTIMER_SO:-/workspace/probe-bundle/xputimer/libxpu_timer_metax.so};" ;;
     C5_flight_recorder)
       echo "unset PROBING PROBING_TORCH_PROFILING; export PROBING=0; export TORCH_NCCL_TRACE_BUFFER_SIZE=\${TORCH_NCCL_TRACE_BUFFER_SIZE:-1048576}; export TORCH_NCCL_DUMP_ON_TIMEOUT=1;"
       ;;
@@ -407,6 +421,25 @@ for r in $(seq 1 "$ROUNDS"); do
         || echo "  WARN: wipe stale markers ${PODS[$n]}"
     done
     denv="$(config_denv "$cfg")"; inj="$(config_has_inject "$cfg")"
+
+    # Greyhound MetaX：dump/marker 落到本轮 out（LOCAL_FS 每 pod 一份）
+    if [ "$cfg" = "C3_greyhound" ]; then
+      denv="${denv}
+mkdir -p '$out/greyhound';
+export GREYHOUND_DUMP='$out/greyhound/mcclprobe.collect.jsonl';
+export GREYHOUND_STUB_MARKER='$out/greyhound/loaded.marker';"
+    fi
+    # XPUTimer MetaX：prom/jsonl 落到本轮 out/xputimer（勿混挂 greyhound）
+    if [ "$cfg" = "C4_xputimer" ]; then
+      denv="${denv}
+mkdir -p '$out/xputimer';
+export XPU_TIMER_ENABLE=1;
+export XPU_TIMER_DUMP_DIR='$out/xputimer';
+export XPU_TIMER_DUMP_INTERVAL_S=\${XPU_TIMER_DUMP_INTERVAL_S:-2};
+export XPU_TIMER_HANG_TIMEOUT_MS=\${XPU_TIMER_HANG_TIMEOUT_MS:-60000};
+export XPU_TIMER_SLOW_REPORT_US=\${XPU_TIMER_SLOW_REPORT_US:-0};
+export XPU_TIMER_LAUNCH_SAMPLE=\${XPU_TIMER_LAUNCH_SAMPLE:-32};"
+    fi
 
     # P3-SW-A：进程内联 8a
     if [ "$inj" = "yes" ] && { [ "$INJECT_KIND" = "8a" ] || [ "$INJECT_KIND" = "inline_8a" ]; }; then

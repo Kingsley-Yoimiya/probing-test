@@ -115,6 +115,7 @@ def main() -> int:
     ap.add_argument("--ranks-c1", default="", help="C1 ranks/ for step_ms dose_check")
     ap.add_argument("--case-id", default="P3-EXT-A")
     ap.add_argument("--case-ref", default="")
+    ap.add_argument("--dose", default="loud", help="loud|quiet|masked (SUMMARY field only)")
     ap.add_argument("--dose-desc", default="")
     ap.add_argument("--accept-min-ratio", type=float, default=1.3)
     ap.add_argument("--window-start", type=int, default=100)
@@ -172,11 +173,11 @@ def main() -> int:
     detect_ok = bool(autonomous_flag or contrast_ok)
 
     lines = [
-        f"# XPUTimer contrast · {args.case_id} Loud",
+        f"# XPUTimer contrast · {args.case_id} {args.dose}",
         "",
         f"- case_id: `{args.case_id}`",
         f"- case_ref: `{case_ref}`",
-        f"- dose: {dose_desc}",
+        f"- dose: `{args.dose}` — {dose_desc}",
         f"- detect_mode: **{detect_mode}** "
         f"（自主=prom hang/slow flags；跨-run=C1/C0 中位比≥{args.accept_min_ratio}，需外部健康基线 C0）",
         f"- metric: jsonl `dur_us` of `{name}` (host-wall around Hccl*)",
@@ -244,7 +245,7 @@ def main() -> int:
     meta = {
         "case_id": args.case_id,
         "tool": "xputimer",
-        "dose": "loud",
+        "dose": args.dose,
         "case_ref": case_ref,
         "metric_name": name,
         "median_c0": m0,

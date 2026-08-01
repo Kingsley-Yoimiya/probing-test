@@ -1,27 +1,58 @@
 #!/usr/bin/env bash
-# P1-SW-C Loud contrast on yysong-worker-1: INLINE 2c compile spike + Greyhound collect-min.
-# Frozen dose (dose_recipes calibrated):
-#   n=1024,every=1,fallback_s=0.25
+# P1-SW-C contrast: INLINE 2c compile spike + Greyhound collect-min.
+# dose=loud (default): n=1024,every=1,fallback_s=0.25；thr=1.3；金标 tip max≈4.63
+# dose=quiet:          n=768,every=4,fallback_s=0.1；thr=1.15；金标 tip max≈2.61（Loud 冻结规则只复测）
+# dose=masked:         n=768,every=4,fallback_s=0.05；thr=1.05；金标 tip max≈2.61（formal@025116）
 # Window [100,300]; mode=gpu_bound; victim local_rank=7.
-# Tip narrative: Probing tip max=4.63, median blind; dose_check may use tip/max.
+# Tip narrative: median 常盲；dose_check 以 tip/max 对齐金标，勿只看 median.
 # Verdict: collect_seq 真实 per-rank + Rbeast + C0 假阳性对照（不改对手阈值）。
-# Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
+# Hold pod 默认今晚 GH 池 yysong-worker-2（勿用 master / grj）。
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 SO="${SO:-/data/yinjinrun.p-huawei/probe-bundle/greyhound/libhcclprobe.so}"
 STUB="${STUB:-/data/yinjinrun.p-huawei/opt/rbeast-fix/libbuiltin_readcyclecounter.so}"
 TBP="${TBP:-/data/yinjinrun.p-huawei/probe-bundle/train_bench_probe_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p1-sw-c-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p1-sw-c-quiet-${TS}}"
+  DOSE_N="${INLINE_2C_N:-768}"
+  DOSE_EVERY="${INLINE_2C_EVERY:-4}"
+  DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.1}"
+  CASE_REF="${CASE_REF:-20260726_021606-yjr-as-c-p1-sw-c-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_TIP_MAX="${GOLD_TIP_MAX:-2.61}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p1-sw-c-masked-${TS}}"
+  DOSE_N="${INLINE_2C_N:-768}"
+  DOSE_EVERY="${INLINE_2C_EVERY:-4}"
+  DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.05}"
+  CASE_REF="${CASE_REF:-20260726_025116-yjr-as-c-p1-sw-c-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_TIP_MAX="${GOLD_TIP_MAX:-2.61}"
+else
+  RUN="${RUN:-contrast-p1-sw-c-${TS}}"
+  DOSE_N="${INLINE_2C_N:-1024}"
+  DOSE_EVERY="${INLINE_2C_EVERY:-1}"
+  DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_121105-yjr-as-c-p1-sw-c-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_TIP_MAX="${GOLD_TIP_MAX:-4.63}"
+fi
+# Prefer AFS results when writable (hold pod may lack /data write); fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-DOSE_N="${INLINE_2C_N:-1024}"
-DOSE_EVERY="${INLINE_2C_EVERY:-1}"
-DOSE_FALLBACK_S="${INLINE_2C_FALLBACK_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
 # Keep DOSE_* immutable for set -u; only export INLINE_2C_* on C1.
 INLINE_2C_N="$DOSE_N"
@@ -29,10 +60,7 @@ INLINE_2C_EVERY="$DOSE_EVERY"
 INLINE_2C_FALLBACK_S="$DOSE_FALLBACK_S"
 MASTER_PORT_C0="${MASTER_PORT_C0:-30390}"
 MASTER_PORT_C1="${MASTER_PORT_C1:-30391}"
-# 单 pod 对照：强制本机环回，禁止继承 hold-job MASTER_ADDR=yysong-master-0
-MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
-CASE_REF="${CASE_REF:-20260725_121105-yjr-as-c-p1-sw-c-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+MASTER_ADDR="${MASTER_ADDR:-}"
 
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
@@ -56,24 +84,28 @@ export PROBING=0
 export LD_LIBRARY_PATH="/tmp/stress_bundle:/usr/local/Ascend/cann-8.5.0/aarch64-linux/lib64:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64:${LD_LIBRARY_PATH:-}"
 unset PROBING_TORCH_PROFILING PROBING_GPU INLINE_INJECT 2>/dev/null || true
 
-# 若外部误传 master DNS，强制改回本机
-if [[ "$MASTER_ADDR" == *master* || "$MASTER_ADDR" == *yysong-master* ]]; then
-  MASTER_ADDR=127.0.0.1
+# Volcano 壳常注入 MASTER_ADDR=yysong-master-0；单 pod 对照必须用本机 / 127.0.0.1
+if [[ -z "${MASTER_ADDR:-}" || "$MASTER_ADDR" == *master* || "$MASTER_ADDR" == *yysong-master* ]]; then
+  MASTER_ADDR=$(ip -4 -o addr show eth0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1 || true)
+  MASTER_ADDR=${MASTER_ADDR:-127.0.0.1}
 fi
+# 硬约束：Loop 要求 MASTER_ADDR=127.0.0.1（单机 16 卡）
+MASTER_ADDR="${FORCE_MASTER_ADDR:-127.0.0.1}"
 
 test -f "$SO" || { echo "missing $SO"; exit 2; }
 test -f "$STUB" || { echo "missing cyclecounter stub $STUB"; exit 2; }
 test -f "$TBP" || { echo "missing $TBP"; exit 2; }
 
-# only kill OUR leftovers on worker-1
+# only kill OUR leftovers on this hold pod
 pkill -9 -x stress-ng 2>/dev/null || true
 pkill -9 -f '[t]bp_npu.py' 2>/dev/null || true
 pkill -9 -f '[t]orchrun.*tbp_npu' 2>/dev/null || true
+pkill -9 -f '[t]rain_bench_probe_npu' 2>/dev/null || true
 sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S}"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S}"
 echo "$RUN" > /tmp/gh_p1swc_run.txt
 echo "$DUMP_ROOT" > /tmp/gh_p1swc_dump.txt
 
@@ -84,12 +116,12 @@ fi
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P1-SW-C
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-1
+pod: ${HOLD_POD}
 pool: pool-gh
 mode: gpu_bound
 inject_kind: inline_2c
@@ -107,7 +139,9 @@ redis: 127.0.0.1:16379
 fairness: collect_seq_real_per_rank + C0_fp_control
 script: platform/ascend/greyhound/contrast_p1swc.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
-tip_note: "Probing tip max=4.63 median blind; dose_check may use tip/max or step_ms"
+gold_tip_max: ${GOLD_TIP_MAX}
+tip_note: "Probing tip max=${GOLD_TIP_MAX} median blind; dose_check must use tip/max (not median alone)"
+master_addr: ${MASTER_ADDR}
 EOF
 
 run_arm() {
@@ -178,7 +212,7 @@ run_arm() {
     if [[ ! -f "$out/ranks/step_${INJECT_START}.marker" ]]; then
       echo "FAIL never reached inject start"; return 1
     fi
-    grep -E "INLINE_2C|SIDECAR" "$out/node_0.log" 2>/dev/null | head -40 >"$out/injection.log" || true
+    grep -E "INLINE_2C|SIDECAR|SPIKE_OK" "$out/node_0.log" 2>/dev/null | head -40 >"$out/injection.log" || true
     echo "SIDECAR_START kind=inline_2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} victim=${VICTIM_LOCAL}" >>"$out/injection.log"
   fi
 
@@ -210,7 +244,7 @@ run_arm C1_inject_none "$MASTER_PORT_C1" 1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="/data/yinjinrun.p-huawei/opt/pydeps${PYTHONPATH:+:$PYTHONPATH}"
 export GREYHOUND_RBEAST_STUB="${STUB}"
-DOSE_DESC="INLINE 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]"
+DOSE_DESC="INLINE 2c n=${DOSE_N} every=${DOSE_EVERY} fallback_s=${DOSE_FALLBACK_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold tip max≈${GOLD_TIP_MAX}"
 LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   /root/miniconda3/envs/llm_test/bin/python3 "$SCRIPT_DIR/s4_verdict.py" \
   --dump-root "$DUMP_ROOT" \
@@ -220,13 +254,14 @@ LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   --case-id P1-SW-C \
   --case-ref "$CASE_REF" \
   --dose-desc "$DOSE_DESC" \
+  --dose "$DOSE" \
   --tool greyhound \
   --run-id "$RUN" \
-  --pod yysong-worker-1 \
+  --pod "$HOLD_POD" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"
 
-# Tip / max dose_check appendix (P1-SW-C: median often blind; Probing gold tip max=4.63)
+# Tip / max dose_check appendix (P1-SW-C: median often blind; align gold tip max)
 TIP_PY="${TIP_PY:-$SCRIPT_DIR/tip_dose_check_p1swc.py}"
 if [[ -f "$TIP_PY" ]]; then
   /root/miniconda3/envs/llm_test/bin/python3 "$TIP_PY" \
@@ -236,6 +271,8 @@ if [[ -f "$TIP_PY" ]]; then
     --window-start "$INJECT_START" \
     --window-stop "$INJECT_STOP" \
     --accept-min-max-ratio 2.5 \
+    --accept-min-med-ratio "$ACCEPT_MIN_RATIO" \
+    --gold-tip-max "${GOLD_TIP_MAX:-4.63}" \
     --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json" \
     --verdict "$DUMP_ROOT/CONTRAST_VERDICT.md" || true
 fi

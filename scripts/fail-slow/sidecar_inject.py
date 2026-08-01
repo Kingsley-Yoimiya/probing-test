@@ -93,7 +93,7 @@ def main():
             flush=True,
         )
     print(
-        f"SIDECAR_START kind={args.kind} duty={args.duty} period={args.period_ms}ms",
+        f"SIDECAR_START kind={args.kind} duty={args.duty} size={args.size} period={args.period_ms}ms",
         flush=True,
     )
 

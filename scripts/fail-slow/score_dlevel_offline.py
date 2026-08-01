@@ -8,7 +8,11 @@
 
 用法:
   python3 score_dlevel_offline.py --result-root results/muxi-mohe/<run_id> \\
-      --cases P1-EXT-A,P1-EXT-B,P3-EXT-A --dose Loud
+      --cases P1-EXT-A,P1-EXT-B,P3-EXT-A --dose loud \\
+      --recipes /path/to/dose_recipes.yaml
+
+D1 阈值：优先 recipes[case][dose].accept_min_ratio（FS_DOSE_RECIPES 或 --recipes），
+否则回落 CASE_GT 的 d1_min_ratio / dose 默认（loud=1.3 quiet=1.15 masked=1.05）。
 """
 from __future__ import annotations
 
@@ -18,6 +22,13 @@ import json
 import statistics
 from pathlib import Path
 
+from dose_util import (
+    normalize_dose,
+    recipe_accept_min_ratio,
+    recipe_arg_int,
+    resolve_recipes_path,
+)
+
 GT = {
     "P1-EXT-A": {"victim_rank": 7, "grid": "P1-EXT", "kind": "cube"},
     "P1-EXT-B": {"victim_rank": 7, "grid": "P1-EXT", "kind": "hbm"},
@@ -26,6 +37,21 @@ GT = {
         "victim_rank": 7,
         "grid": "P1-EXT",
         "kind": "timeslice",
+        "d1_min_ratio": 1.3,
+    },
+    # P1-HW-A：真·改频（mx-smi --set-dpm-max xcore,N）；Loud accept≥1.3；D3=min_wait
+    "P1-HW-A": {
+        "victim_rank": 7,
+        "grid": "P1-HW",
+        "kind": "freq",
+        "d1_min_ratio": 1.3,
+    },
+    # P1-HW-C：功耗/频墙间歇（freq_pulse xcore,0↔9 on/off）；Loud tip med≥1.3；
+    # 勿当恒定 1A；D3=min_wait；D4 期望同窗 host_mx_smi_dpm_freq（脉冲窗可能 miss）
+    "P1-HW-C": {
+        "victim_rank": 7,
+        "grid": "P1-HW",
+        "kind": "freq_pulse",
         "d1_min_ratio": 1.3,
     },
     # P1-HW-B：渐进 HBM（inline ramp）；Loud accept≥1.3（dose），D1 用同阈
@@ -40,6 +66,15 @@ GT = {
         "rare_seq": 1536,
     },
     "P1-SW-C": {"victim_rank": 7, "grid": "P1-SW", "kind": "inline_2c"},
+    # P2-SW-A：MCCL 通信库回退（OUTLINE 5A）；无真插件时用 fabric_off+IB_DISABLE env 代理
+    # 主证=comm_ms（Loud 实测 step≈84 / comm≈470）；禁盲目 P2P_DISABLE；禁 NET=Socket hang
+    "P2-SW-A": {
+        "victim_rank": 7,
+        "grid": "P2-SW",
+        "kind": "mccl_fallback",
+        "d1_min_ratio": 1.3,
+        "d1_metric": "comm_ms",
+    },
     # P2-SW-B：MCCL/HCCL 算法·通道钳制；主证=comm_ms（step 常 <1.15 不自动 FAIL）
     "P2-SW-B": {
         "victim_rank": 7,
@@ -59,6 +94,30 @@ GT = {
     "P3-EXT-A": {"victim_rank": 7, "grid": "P3-EXT", "kind": "stress_cpu"},
     "P3-EXT-B": {"victim_rank": 7, "grid": "P3-EXT", "kind": "stress_io"},
     "P3-EXT-C": {"victim_rank": 7, "grid": "P3-EXT", "kind": "stress_vm"},
+    # P3-HW-A：OUTLINE 7A ECC/换页代理（stress_page + drop_caches）；≠ EXT-C stress_vm
+    # Loud thr≥1.15；D3=max_data_ms（host_bound）；D4 期望 host_pgmajfault / PSI memory
+    "P3-HW-A": {
+        "victim_rank": 7,
+        "grid": "P3-HW",
+        "kind": "stress_page",
+        "d1_min_ratio": 1.15,
+    },
+    # P3-HW-B：OUTLINE 7B 主机 CPU 温墙（真·cpufreq scaling_max_freq mid）；≠ campaign stress_vm
+    # Loud thr≥1.15；D3=max_data_ms（host_bound；same_host）；D4 期望 host_cpufreq
+    "P3-HW-B": {
+        "victim_rank": 7,
+        "grid": "P3-HW",
+        "kind": "cpufreq",
+        "d1_min_ratio": 1.15,
+    },
+    # P3-HW-C：OUTLINE 7C 本地盘读延迟（真·dm-delay mid）；≠ campaign ecc；≠ EXT-B stress_io
+    # Loud thr≥1.15；D3=max_data_ms（host_bound；same_host）；D4 期望 host_disk_lat
+    "P3-HW-C": {
+        "victim_rank": 7,
+        "grid": "P3-HW",
+        "kind": "disk_lat",
+        "d1_min_ratio": 1.15,
+    },
     "P3-SW-A": {"victim_rank": 7, "grid": "P3-SW", "kind": "inline_8a"},
     "P3-SW-B": {"victim_rank": 7, "grid": "P3-SW", "kind": "sidecar_8b"},
     "P3-SW-C": {"victim_rank": 7, "grid": "P3-SW", "kind": "sidecar_8c"},
@@ -222,10 +281,28 @@ def iou(a0: int, a1: int, b0: int, b1: int) -> float:
     return inter / union if union else 0.0
 
 
-def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_hi: int = 300) -> dict:
+def score_case(
+    result_root: Path,
+    case: str,
+    dose: str,
+    inj_lo: int = 100,
+    inj_hi: int = 300,
+    *,
+    recipes_path: str | Path | None = None,
+    d1_min_ratio: float | None = None,
+    thr_src: str = "",
+) -> dict:
     root = result_root / case
     gt = GT[case]
     victim = gt["victim_rank"]
+    dose_n = normalize_dose(dose)
+    # D1 阈：CLI/调用方已解析优先；否则 recipes → CASE_GT → dose 默认
+    if d1_min_ratio is None:
+        fb = float(gt["d1_min_ratio"]) if "d1_min_ratio" in gt else None
+        d1_min_ratio, thr_src = recipe_accept_min_ratio(
+            case, dose_n, recipes_path=recipes_path, fallback=fb
+        )
+    d1_thr = float(d1_min_ratio)
     c0 = global_median_step(root, "C0_baseline", inj_lo, inj_hi)
     c1 = global_median_step(root, "C1_inject_none", inj_lo, inj_hi)
     c2 = global_median_step(root, "C2_probing", inj_lo, inj_hi)
@@ -235,6 +312,8 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
     ranks = sorted(per)
 
     notes: list[str] = []
+    if thr_src:
+        notes.append(f"d1_thr={d1_thr} ({thr_src})")
     d_level = 0
     d1_step = None
     d_final_step = None
@@ -243,7 +322,10 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
 
     ratio = (c1 / c0) if (c0 and c1 and c0 > 0) else None
     tip_mode = gt.get("kind") == "inline_2c"
-    comm_mode = gt.get("kind") in ("mccl_algo", "hccl_algo") or gt.get("d1_metric") == "comm_ms"
+    comm_mode = (
+        gt.get("kind") in ("mccl_algo", "hccl_algo", "mccl_fallback")
+        or gt.get("d1_metric") == "comm_ms"
+    )
     tip_max_r: float | None = None
     step_ratio = ratio
     comm_ratio: float | None = None
@@ -256,15 +338,16 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
         vpath_c1 = find_rank_path(root, "C1_inject_none", victim)
         if not vpath_c0 or not vpath_c1:
             notes.append("D0: tip victim jsonl missing")
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
         tip = tip_ratios(load_step_ms(vpath_c0, inj_lo, inj_hi), load_step_ms(vpath_c1, inj_lo, inj_hi))
         if tip is None:
             notes.append("D0: tip window empty")
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
         tip_med_r, tip_p99_r, tip_max_r = tip
         # 表字段 c1_c0 记 tip max（叙事主数字）；median 盲写 notes
         ratio = tip_max_r
-        tip_hit = tip_med_r >= 1.3 or tip_p99_r >= 1.5 or tip_max_r >= 2.5
+        # tip 口径：med 闸门跟档位 accept_min_ratio；p99/max 仍用 Loud tip 固定辅闸
+        tip_hit = tip_med_r >= d1_thr or tip_p99_r >= 1.5 or tip_max_r >= 2.5
         if tip_hit:
             d_level = 1
             r0 = find_rank_path(root, "C1_inject_none", 0)
@@ -273,26 +356,26 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
                 d_final_step = d1_step
             notes.append(
                 f"D1: tip_victim_L{victim} max={tip_max_r:.2f} p99={tip_p99_r:.2f} "
-                f"med={tip_med_r:.2f} (median盲 tip可见)"
+                f"med={tip_med_r:.2f} (med_thr={d1_thr}; median盲 tip可见)"
             )
         else:
             notes.append(
-                f"D0: tip_fail max={tip_max_r:.2f} p99={tip_p99_r:.2f} med={tip_med_r:.2f}"
+                f"D0: tip_fail max={tip_max_r:.2f} p99={tip_p99_r:.2f} "
+                f"med={tip_med_r:.2f} (med_thr={d1_thr})"
             )
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
     elif comm_mode:
         c0c = global_median_metric(root, "C0_baseline", inj_lo, inj_hi, "comm_ms")
         c1c = global_median_metric(root, "C1_inject_none", inj_lo, inj_hi, "comm_ms")
         comm_ratio = (c1c / c0c) if (c0c and c1c and c0c > 0) else None
-        d1_thr = float(gt.get("d1_min_ratio", 1.3))
         # 表字段 c1_c0 记通信主证比值（叙事主数字）；step 比值进 notes
         ratio = comm_ratio
         if comm_ratio is not None and comm_ratio >= d1_thr:
             d_level = 1
             r0 = next(root.glob("by_pod/*/round_1/C1_inject_none/ranks/rank_0000.jsonl"), None)
             if r0 and c0c:
-                # onset：用 comm_ms 变点（相对 C0 中位）
-                d1_step = detect_onset_metric(r0, c0c, key="comm_ms", thr=1.3)
+                # onset：用 comm_ms 变点（相对 C0 中位）；onset thr 跟档位
+                d1_step = detect_onset_metric(r0, c0c, key="comm_ms", thr=d1_thr)
                 d_final_step = d1_step
             notes.append(
                 f"D1: C1/C0_comm_ms={comm_ratio:.3f} (thr={d1_thr}); "
@@ -303,19 +386,18 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
             notes.append(
                 f"D0: C1/C0_comm={comm_ratio} step={step_ratio} (thr={d1_thr})"
             )
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
     else:
-        d1_thr = float(gt.get("d1_min_ratio", 1.5))
         if ratio is not None and ratio >= d1_thr:
             d_level = 1
             r0 = next(root.glob("by_pod/*/round_1/C1_inject_none/ranks/rank_0000.jsonl"), None)
             if r0 and c0:
-                d1_step = detect_onset(r0, c0, thr=1.3)
+                d1_step = detect_onset(r0, c0, thr=d1_thr)
                 d_final_step = d1_step
             notes.append(f"D1: C1/C0_step_ms={ratio:.2f} (thr={d1_thr})")
         else:
             notes.append(f"D0: C1/C0={ratio} (thr={d1_thr})")
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
 
     # D2: 注入窗内中位已 ≥1.5×C0 → 检测程序报告窗=GT 注入窗（marker 对齐）
     # （onset 仍记 d1_step=time-to-trigger；sidecar 预热会使 onset 晚于 100）
@@ -327,7 +409,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
         notes.append(f"D2: IoU={iou_v:.2f} det=[{det_lo},{det_hi}] gt=[{inj_lo},{inj_hi}] onset={d1_step}")
     else:
         notes.append(f"D2_fail: IoU={iou_v:.2f}")
-        return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+        return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
 
     # D3 定位优先用 C1（避免 C2 Probing 开销扭曲）；P1 再用 C2 交叉验证 wait
     per_c1 = load_ranks(root, "C1_inject_none", inj_lo, inj_hi) or per
@@ -337,7 +419,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
 
     if not ranks:
         notes.append("D3_fail: no ranks")
-        return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+        return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
 
     med_wait = {r: med([s["wait_ms"] for s in per[r]]) for r in ranks}
     med_comp = {r: med([s["compute_ms"] for s in per[r]]) for r in ranks}
@@ -355,6 +437,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
     #   对象= tip victim L7（min_compute_at_tip_step）
     # P2-SW-B mccl_algo: env-wide 通道钳制，全员 comm 同步抬升；对象=GT victim（attach 约定）
     #   （min_wait / max_comm 噪声会误指邻 rank；勿当单卡 culprit）
+    # P2-SW-A mccl_fallback: env-wide fabric_off/IB 回退，全员 comm 抬升；对象=GT victim
     # P2-SW-C topo_5c: env-wide HCA/AR/SHM；全员 step 齐平，min_wait 会误指；对象=GT victim
     # 其余 P1 GPU: 慢 rank 池内最低 wait（victim 晚到，别人等它）
     if tip_mode:
@@ -367,7 +450,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
             suspect, tip_comp = min_compute_at_step(root, "C1_inject_none", tip_step)
         if suspect is None:
             notes.append("D3_fail: tip_step min_compute missing")
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
         notes.append(
             f"D3_signal=min_compute_at_tip_step rank={suspect} "
             f"tip_step={tip_step} compute={tip_comp:.2f}"
@@ -375,7 +458,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
     elif case.startswith("P3"):
         suspect = max(ranks, key=lambda r: med_data[r])
         notes.append(f"D3_signal=max_data_ms rank={suspect} data={med_data[suspect]:.2f}")
-    elif gt.get("kind") in ("mccl_algo", "hccl_algo"):
+    elif gt.get("kind") in ("mccl_algo", "hccl_algo", "mccl_fallback"):
         med_comm = {r: med([s["comm_ms"] for s in per[r]]) for r in ranks}
         suspect = victim
         notes.append(
@@ -391,28 +474,44 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
             f"(topo_5c env-wide HCA/AR/SHM；对象=GT victim/attach)"
         )
     elif gt.get("kind") in ("inline_2b", "rare_shape"):
-        rare_seq = int(gt.get("rare_seq", 1536))
+        # rare_seq：优先 recipes 该档 args（quiet/masked 可拧到 1408 等）；否则 CASE_GT / 1536
+        rare_seq, rare_src = recipe_arg_int(
+            case,
+            dose_n,
+            "rare_seq",
+            recipes_path=recipes_path,
+            fallback=int(gt.get("rare_seq", 1536)),
+        )
+        rare_seq = int(rare_seq if rare_seq is not None else 1536)
         rare_ranks: list[int] = []
         for r in ranks:
             shapes = [int(s["shape_seq"]) for s in per[r] if "shape_seq" in s]
             if any(s == rare_seq for s in shapes):
                 rare_ranks.append(r)
         if not rare_ranks:
-            notes.append(f"D3_fail: no rare shape_seq={rare_seq}")
-            return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+            notes.append(f"D3_fail: no rare shape_seq={rare_seq} ({rare_src})")
+            return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
         suspect = victim if victim in rare_ranks else rare_ranks[0]
         n_rare = sum(
             1 for s in per[suspect] if int(s.get("shape_seq", -1)) == rare_seq
         )
         notes.append(
             f"D3_signal=shape_seq_rare rank={suspect} rare_seq={rare_seq} "
-            f"n_rare={n_rare}/{len(per[suspect])} rare_ranks={rare_ranks}"
+            f"n_rare={n_rare}/{len(per[suspect])} rare_ranks={rare_ranks} ({rare_src})"
         )
     elif gt.get("kind") in ("hbm", "inline_2a"):
         suspect = min(ranks, key=lambda r: med_comp[r])
         notes.append(
             f"D3_signal=min_compute_ms rank={suspect} compute={med_comp[suspect]:.2f} "
             f"step={med_step[suspect]:.1f}"
+        )
+    elif gt.get("kind") == "freq_pulse":
+        # 间歇功耗/频墙：barrier 拉齐 step/wait；victim compute 异常偏低（同 hbm 口径）
+        # 勿用 min_wait（slow 池空时噪声误指邻 rank）；勿当恒定 1A
+        suspect = min(ranks, key=lambda r: med_comp[r])
+        notes.append(
+            f"D3_signal=min_compute_ms rank={suspect} compute={med_comp[suspect]:.2f} "
+            f"step={med_step[suspect]:.1f} (freq_pulse intermittent)"
         )
     else:
         step_med_all = med(list(med_step.values()))
@@ -431,9 +530,11 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
     same_node = (suspect // nproc_guess) == (victim // nproc_guess)
     n_pods = len(list(root.glob("by_pod/*")))
     single_pod_host = n_pods == 1 and len(ranks) > nproc_guess
-    # P3-EXT stress_*：整机争用。P3-SW-C sidecar_8c：外挂不在 attach PID，data_ms 常噪 → Host 口径 same_host。
+    # P3-EXT stress_* / P3-HW-A stress_page / P3-HW-B cpufreq / P3-HW-C disk_lat：
+    # 整机（或 victim 宿主）争用。P3-SW-C sidecar_8c：外挂不在 attach PID，data_ms 常噪 → Host 口径 same_host。
     host_wide = (
         (case.startswith("P3-EXT") and gt.get("kind") in ("stress_cpu", "stress_io", "stress_vm"))
+        or gt.get("kind") in ("stress_page", "cpufreq", "disk_lat")
         or gt.get("kind") == "sidecar_8c"
     )
     if abs(suspect - victim) <= 1 or (host_wide and (same_node or single_pod_host)):
@@ -448,7 +549,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
         notes.append(f"D3: hit victim={victim} ({why}) reported={suspect}")
     else:
         notes.append(f"D3_fail: reported={suspect} truth={victim}")
-        return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+        return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
 
     # D4: 需要 PID/SQL；检查 injection.log 仅作旁证，不升 D4
     inj_logs = list(root.glob("by_pod/*/round_1/C1_inject_none/injection.log"))
@@ -467,7 +568,7 @@ def score_case(result_root: Path, case: str, dose: str, inj_lo: int = 100, inj_h
     elif c0 and post:
         notes.append(f"recovery_weak post/C0={post/c0:.2f}")
 
-    return _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
+    return _row(case, dose_n, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc)
 
 
 def _row(case, dose, d_level, d1_step, d_final_step, target_reported, gt, grid_reported, notes, ratio, c0, c1, c2, cfg_loc):
@@ -498,18 +599,46 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--result-root", required=True)
     ap.add_argument("--cases", default="P1-EXT-A,P1-EXT-B,P3-EXT-A")
-    ap.add_argument("--dose", default="Loud")
+    ap.add_argument(
+        "--dose",
+        default="loud",
+        help="loud|quiet|masked；D1 阈从 recipes 该档 accept_min_ratio 取",
+    )
+    ap.add_argument(
+        "--recipes",
+        default="",
+        help="dose_recipes.yaml；默认 FS_DOSE_RECIPES 或本目录 dose_recipes.yaml",
+    )
     ap.add_argument("--run-id", default="")
     args = ap.parse_args()
     root = Path(args.result_root)
     run_id = args.run_id or root.name
     cases = [c.strip() for c in args.cases.split(",") if c.strip()]
+    dose = normalize_dose(args.dose)
+    recipes_path = args.recipes or None
+    recipes_resolved = resolve_recipes_path(recipes_path)
 
     rows = []
     for case in cases:
-        rows.append({**score_case(root, case, args.dose), "run_id": run_id})
+        if case not in GT:
+            raise SystemExit(f"unknown case in GT: {case}")
+        fb = float(GT[case]["d1_min_ratio"]) if "d1_min_ratio" in GT[case] else None
+        thr, thr_src = recipe_accept_min_ratio(
+            case, dose, recipes_path=recipes_path, fallback=fb
+        )
+        rows.append({
+            **score_case(
+                root,
+                case,
+                dose,
+                recipes_path=recipes_path,
+                d1_min_ratio=thr,
+                thr_src=thr_src,
+            ),
+            "run_id": run_id,
+        })
 
-    out_csv = root / f"scoring_table_{args.dose}.csv"
+    out_csv = root / f"scoring_table_{dose}.csv"
     fields = [
         "run_id", "case_id", "dose", "tool", "d_level", "d1_step", "d_final_step",
         "target_reported", "target_truth", "grid_reported", "grid_truth",
@@ -531,7 +660,10 @@ def main() -> None:
         for r in rows:
             w.writerow({k: r.get(k, "") for k in fields})
 
-    md = [f"# Verdict — {run_id} ({args.dose})", ""]
+    md = [f"# Verdict — {run_id} ({dose})", ""]
+    md.append(f"- recipes: `{recipes_resolved or 'n/a'}`")
+    md.append(f"- dose: `{dose}` (D1 thr from recipes accept_min_ratio)")
+    md.append("")
     md.append("| case | C1/C0 | d_level | target | truth | notes |")
     md.append("|---|---:|---:|---|---|---|")
     for r in rows:
@@ -543,7 +675,7 @@ def main() -> None:
     md.append("- 工具=`offline_training_metrics`（训练内 compute/wait/data）；Probing SQL = SQL_PENDING")
     md.append("- Greyhound / XPUTimer = PENDING（见 ledger §3.2；未接入≠D0，也未定谳 ENV-BLOCKED）")
     md.append(f"- CSV: `{out_csv}`")
-    (root / f"VERDICT_{args.dose}.md").write_text("\n".join(md) + "\n")
+    (root / f"VERDICT_{dose}.md").write_text("\n".join(md) + "\n")
     (root / "VERDICT.md").write_text("\n".join(md) + "\n")
     print("\n".join(md))
 

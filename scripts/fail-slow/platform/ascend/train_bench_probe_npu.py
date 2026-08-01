@@ -14,6 +14,15 @@ from pathlib import Path
 
 
 def _activate_probing_if_requested() -> None:
+    # Pillar-C S1：PROBING_ATTACH_AT_STEP 时延后到训练步再 import/site_hook
+    # （Ascend hold 无独立 libprobing.so，无法依赖 CLI ptrace inject）
+    if os.environ.get("PROBING_ATTACH_AT_STEP", "").strip():
+        print(
+            "[train_bench_probe_npu] probing deferred → PROBING_ATTACH_AT_STEP="
+            f"{os.environ.get('PROBING_ATTACH_AT_STEP')}",
+            flush=True,
+        )
+        return
     val = os.environ.get("PROBING", "0").strip().lower()
     if val in ("", "0", "off", "false", "no"):
         return
@@ -23,6 +32,42 @@ def _activate_probing_if_requested() -> None:
         run_site_hook()
     except Exception as exc:  # noqa: BLE001
         print(f"[train_bench_probe_npu] probing site_hook failed: {exc}", flush=True)
+
+
+def _maybe_mid_attach_probing(step: int, out_dir: Path, rank: int) -> None:
+    """S1 中途接入：在指定 step 首次 import probing / run_site_hook。"""
+    raw = os.environ.get("PROBING_ATTACH_AT_STEP", "").strip()
+    if not raw:
+        return
+    try:
+        at = int(raw)
+    except ValueError:
+        return
+    if int(step) != at:
+        return
+    val = os.environ.get("PROBING", "0").strip().lower()
+    if val in ("", "0", "off", "false", "no"):
+        os.environ["PROBING"] = os.environ.get("PROBING_DEFERRED_VALUE", "2")
+    ts = time.time()
+    try:
+        import probing.site_hook as sh
+        from probing.site_hook import run_site_hook
+
+        if getattr(sh, "_RAN", False):
+            import probing  # noqa: F401
+        else:
+            run_site_hook()
+        print(f"PROBING_MID_ATTACH_OK step={step} ts={ts}", flush=True)
+        if rank == 0:
+            (out_dir / "probing_mid_attach.marker").write_text(
+                f"step={step}\nts={ts}\n", encoding="utf-8"
+            )
+    except Exception as exc:  # noqa: BLE001
+        print(f"PROBING_MID_ATTACH_FAIL step={step} err={exc}", flush=True)
+        if rank == 0:
+            (out_dir / "probing_mid_attach.fail").write_text(
+                f"step={step}\nts={ts}\nerr={exc}\n", encoding="utf-8"
+            )
 
 
 _activate_probing_if_requested()
@@ -253,7 +298,9 @@ def main() -> None:
             torch.npu.synchronize()
 
         # P1-SW-C / 2c：清 inductor 缓存 + 未见 shape 的 torch.compile one-shot（计时区内）
-        # Ascend 上 compile 常失败；失败则 sleep 近似尖刺，保证 Loud 可咬。
+        # Ascend 上 compile 常失败。裸 sleep 只抬 step_ms、不进 torch_trace module duration；
+        # 归因尺要 post-forward duration≥0.4s 且≥3×中位 → 必须走 nn.Module.forward
+        #（probing hook 记 wall duration）。默认 stall≥0.6s（旧 0.25 低于 0.4 阈值）。
         if compile_spike_n > 0:
             import shutil as _shutil
 
@@ -261,6 +308,8 @@ def main() -> None:
                 "TORCHINDUCTOR_CACHE_DIR",
                 "/tmp/p1swc_inductor_cache",
             )
+            stall = float(os.environ.get("INLINE_2C_FALLBACK_S", "0.6"))
+            compile_ok = False
             try:
                 if os.path.isdir(_cache):
                     _shutil.rmtree(_cache, ignore_errors=True)
@@ -277,11 +326,36 @@ def main() -> None:
                 _c = _spike(_a, _b)
                 torch.npu.synchronize()
                 del _a, _b, _c, _spike
+                compile_ok = True
                 print(f"INLINE_2C_SPIKE_OK n={_n}", flush=True)
             except Exception as exc:  # noqa: BLE001
-                stall = float(os.environ.get("INLINE_2C_FALLBACK_S", "0.25"))
-                print(f"INLINE_2C_FALLBACK sleep={stall}s err={exc}", flush=True)
-                time.sleep(stall)
+                print(f"INLINE_2C_COMPILE_FAIL err={exc}", flush=True)
+
+            # 可复现 torch_trace duration 尖刺（E1 / ②-A 归因尺）；与 compile 成败无关
+            class _P1SwcDurationSpike(torch.nn.Module):
+                def __init__(self, stall_s: float):
+                    super().__init__()
+                    self.stall_s = float(stall_s)
+                    self._bias = torch.nn.Parameter(
+                        torch.zeros(1, device=device), requires_grad=False
+                    )
+
+                def forward(self, x):
+                    t0 = time.perf_counter()
+                    # wall stall inside forward → probing post-forward duration
+                    while time.perf_counter() - t0 < self.stall_s:
+                        time.sleep(0.01)
+                    return x + self._bias
+
+            _m = _P1SwcDurationSpike(stall).to(device)
+            _x = torch.zeros(1, device=device)
+            with torch.no_grad():
+                _ = _m(_x)
+            print(
+                f"INLINE_2C_DURATION_SPIKE stall_s={stall} compile_ok={int(compile_ok)}",
+                flush=True,
+            )
+            del _m, _x
 
         # P1-SW-A：碎片累积 + 骤停须在 barrier 前，才能拖全局 step_ms
         if frag_action is not None:
@@ -502,7 +576,7 @@ def main() -> None:
     if do_inline_2c:
         print(
             f"INLINE_2C_COMPILE every={compile_every} base_n={compile_base_n} "
-            f"fallback_s={os.environ.get('INLINE_2C_FALLBACK_S', '0.25')} "
+            f"fallback_s={os.environ.get('INLINE_2C_FALLBACK_S', '0.6')} "
             f"win=[{inline_start},{inline_stop}) victim_local={inline_victim}",
             flush=True,
         )
@@ -511,6 +585,7 @@ def main() -> None:
     f = out_file.open("a", buffering=1)
     try:
         for i in range(args.iters):
+            _maybe_mid_attach_probing(i, out_dir, rank)
             in_win_8a = bool(do_inline_8a and inline_start <= i < inline_stop)
             in_win_8b = bool(do_inline_8b and inline_start <= i < inline_stop)
             in_win_hbm = bool(do_inline_hbm and inline_start <= i < inline_stop)
@@ -615,7 +690,8 @@ def main() -> None:
             if (i + 1) % args.flush_every == 0:
                 f.flush()
                 os.fsync(f.fileno())
-            if rank == 0 and (i + 1) in {100, 300}:
+            # HANDOFF：注入窗依赖 100 整数倍 marker（统一 200/400）；rank0 每 100 步落盘
+            if rank == 0 and (i + 1) % 100 == 0:
                 (out_dir / f"step_{i + 1}.marker").write_text(str(time.time()))
             ckpt_every = max(1, int(args.ckpt_every))
             if rank == 0 and (i + 1) % ckpt_every == 0:

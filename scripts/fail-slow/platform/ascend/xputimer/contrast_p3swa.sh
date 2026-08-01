@@ -1,27 +1,51 @@
 #!/usr/bin/env bash
-# P3-SW-A Loud contrast on yysong-worker-2: INLINE 8a GC/stall + XPUTimer preload.
-# Frozen dose (dose_recipes calibrated):
-#   inline_gc_every=1,inline_gc_stall_s=0.25
+# P3-SW-A contrast on yysong-worker-2: INLINE 8a GC/stall + XPUTimer preload.
+# dose=loud (default): inline_gc_every=1,inline_gc_stall_s=0.25；thr=1.3
+# dose=quiet:          inline_gc_every=1,inline_gc_stall_s=0.1；thr=1.15（Loud 冻结规则只复测）
+# dose=masked:         inline_gc_every=1,inline_gc_stall_s=0.05；thr=1.05（calibrated formal D4）
 # Window [100,300]; mode=host_bound; victim local_rank=7.
+# Verdict: 分列自主 hang/slow flags vs 跨-run coll 中位比；勿误标 autonomous。
 # Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 CODE="${CODE:-/data/yinjinrun.p-huawei/lab-workspace/xputimer}"
 SO="${SO:-$CODE/libxpu_timer_ascend.so}"
 TBP="${TBP:-/tmp/tbp_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p3-sw-a-${TS}}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p3-sw-a-quiet-${TS}}"
+  GC_EVERY="${INLINE_GC_EVERY:-1}"
+  GC_STALL_S="${INLINE_GC_STALL_S:-0.1}"
+  CASE_REF="${CASE_REF:-20260725_215903-yjr-as-c-p3-sw-a-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30270}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30271}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p3-sw-a-masked-${TS}}"
+  GC_EVERY="${INLINE_GC_EVERY:-1}"
+  GC_STALL_S="${INLINE_GC_STALL_S:-0.05}"
+  CASE_REF="${CASE_REF:-20260725_224156-yjr-as-c-p3-sw-a-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30280}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30281}"
+else
+  RUN="${RUN:-contrast-p3-sw-a-${TS}}"
+  GC_EVERY="${INLINE_GC_EVERY:-1}"
+  GC_STALL_S="${INLINE_GC_STALL_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_012957-yjr-as-c-p3-sw-a-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30260}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30261}"
+fi
 DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN}"
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-GC_EVERY="${INLINE_GC_EVERY:-1}"
-GC_STALL_S="${INLINE_GC_STALL_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30260}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30261}"
 _local_ip() {
   # Prefer eth0 / route src; avoid inheriting hold-job MASTER_ADDR (master-0).
   local ip=""
@@ -36,8 +60,6 @@ _local_ip() {
   echo "${ip:-127.0.0.1}"
 }
 MASTER_ADDR="${FORCE_MASTER_ADDR:-$(_local_ip)}"
-CASE_REF="${CASE_REF:-20260725_012957-yjr-as-c-p3-sw-a-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
 
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
@@ -61,18 +83,18 @@ sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} gc_every=${GC_EVERY} stall_s=${GC_STALL_S}"
 echo "$RUN" > /tmp/xpu_p3swa_run.txt
 echo "$DUMP_ROOT" > /tmp/xpu_p3swa_dump.txt
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P3-SW-A
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-2
+pod: ${HOLD_POD}
 pool: pool-xpu
 mode: host_bound
 inject_kind: inline_8a
@@ -189,6 +211,7 @@ python3 "$VERDICT_PY" \
   --ranks-c1 "$DUMP_ROOT/C1_inject_none/ranks" \
   --case-id P3-SW-A \
   --case-ref "$CASE_REF" \
+  --dose "$DOSE" \
   --dose-desc "INLINE 8a gc_every=${GC_EVERY} stall_s=${GC_STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]" \
   --accept-min-ratio "$ACCEPT_MIN_RATIO" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \

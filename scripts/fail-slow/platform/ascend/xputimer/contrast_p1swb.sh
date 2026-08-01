@@ -1,27 +1,61 @@
 #!/usr/bin/env bash
-# P1-SW-B Loud contrast on yysong-worker-2: INLINE 2b rare_shape + XPUTimer preload.
-# Frozen dose (dose_recipes calibrated):
-#   rare_seq=1536,every=1
+# P1-SW-B contrast on yysong-worker-2: INLINE 2b rare_shape + XPUTimer preload.
+# dose=loud (default): rare_seq=1536,every=1；thr=1.15；金标≈1.36
+# dose=quiet:          rare_seq=1408,every=1；thr=1.15；金标≈1.288（Loud 冻结规则只复测）
+# dose=masked:         rare_seq=1408,every=1；thr=1.05；金标≈1.287（=quiet 剂量；formal@072137）
 # Window [100,300]; mode=gpu_bound; victim local_rank=7.
+# Verdict: 分列自主 hang/slow flags vs 跨-run coll 中位比；勿误标 autonomous。
 # Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 CODE="${CODE:-/data/yinjinrun.p-huawei/lab-workspace/xputimer}"
 SO="${SO:-$CODE/libxpu_timer_ascend.so}"
 TBP="${TBP:-/tmp/tbp_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p1-sw-b-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p1-sw-b-quiet-${TS}}"
+  RARE_SEQ="${RARE_SHAPE_SEQ:-1408}"
+  RARE_EVERY="${RARE_SHAPE_EVERY:-1}"
+  CASE_REF="${CASE_REF:-20260726_052307-yjr-as-c-p1-sw-b-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.288}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30280}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30281}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p1-sw-b-masked-${TS}}"
+  RARE_SEQ="${RARE_SHAPE_SEQ:-1408}"
+  RARE_EVERY="${RARE_SHAPE_EVERY:-1}"
+  CASE_REF="${CASE_REF:-20260726_072137-yjr-as-c-p1-sw-b-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.287}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30282}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30283}"
+else
+  RUN="${RUN:-contrast-p1-sw-b-${TS}}"
+  RARE_SEQ="${RARE_SHAPE_SEQ:-1536}"
+  RARE_EVERY="${RARE_SHAPE_EVERY:-1}"
+  CASE_REF="${CASE_REF:-20260725_115732-yjr-as-c-p1-sw-b-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.36}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30280}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30281}"
+fi
+# Prefer AFS results when writable; fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-RARE_SEQ="${RARE_SHAPE_SEQ:-1536}"
-RARE_EVERY="${RARE_SHAPE_EVERY:-1}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30280}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30281}"
 _local_ip() {
   # Prefer eth0 / route src; avoid inheriting hold-job MASTER_ADDR (master-0).
   local ip=""
@@ -36,9 +70,15 @@ _local_ip() {
   echo "${ip:-127.0.0.1}"
 }
 MASTER_ADDR="${FORCE_MASTER_ADDR:-$(_local_ip)}"
-CASE_REF="${CASE_REF:-20260725_115732-yjr-as-c-p1-sw-b-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
 
+# Ascend libs (bashrc sources these on interactive -lc; nohup/non-login needs explicit)
+set +u
+export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:${LD_LIBRARY_PATH:-}
+# shellcheck disable=SC1091
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# shellcheck disable=SC1091
+[[ -f /usr/local/Ascend/nnal/atb/set_env.sh ]] && source /usr/local/Ascend/nnal/atb/set_env.sh
+set -u
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
 export PYTHONUNBUFFERED=1
@@ -61,18 +101,18 @@ sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} rare_seq=${RARE_SEQ} every=${RARE_EVERY}"
 echo "$RUN" > /tmp/xpu_p1swb_run.txt
 echo "$DUMP_ROOT" > /tmp/xpu_p1swb_dump.txt
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P1-SW-B
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-2
+pod: ${HOLD_POD}
 pool: pool-xpu
 mode: gpu_bound
 inject_kind: inline_2b
@@ -87,6 +127,7 @@ tool: XPUTimer
 label_prefix: yjr-as-b-xpu
 script: platform/ascend/xputimer/contrast_p1swb.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
+gold_step_ratio: ${GOLD_STEP_RATIO}
 EOF
 
 run_arm() {
@@ -117,6 +158,7 @@ run_arm() {
   echo "========== $arm port=$port inject=$do_inject 2b rare_seq=${RARE_SEQ} every=${RARE_EVERY} =========="
   rm -f "$out/node_0.done" "$out/node_0.fail"
   (
+    set +e
     LD_PRELOAD="$SO" \
     /root/miniconda3/envs/llm_test/bin/torchrun --nnodes=1 --nproc_per_node="$NPROC" --node_rank=0 \
       --master_addr="$MASTER_ADDR" --master_port="$port" \
@@ -126,6 +168,7 @@ run_arm() {
       --out-dir="$out/ranks" >"$out/node_0.log" 2>&1
     rc=$?
     if [[ $rc -eq 0 ]]; then touch "$out/node_0.done"; else echo $rc >"$out/node_0.fail"; fi
+    exit 0
   ) &
   local train_pid=$!
 
@@ -190,7 +233,8 @@ python3 "$VERDICT_PY" \
   --ranks-c1 "$DUMP_ROOT/C1_inject_none/ranks" \
   --case-id P1-SW-B \
   --case-ref "$CASE_REF" \
-  --dose-desc "INLINE 2b rare_seq=${RARE_SEQ} every=${RARE_EVERY} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]" \
+  --dose "$DOSE" \
+  --dose-desc "INLINE 2b rare_seq=${RARE_SEQ} every=${RARE_EVERY} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈${GOLD_STEP_RATIO}" \
   --accept-min-ratio "$ACCEPT_MIN_RATIO" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"

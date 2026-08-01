@@ -1,30 +1,65 @@
 #!/usr/bin/env bash
-# P1-SW-A Loud contrast on yysong-worker-2: INLINE 2a mem-frag + XPUTimer preload.
-# Frozen dose (dose_recipes calibrated):
-#   chunks=12,stall_mb=768,stall_s=0.25
+# P1-SW-A contrast on yysong-worker-2: INLINE 2a mem-frag + XPUTimer preload.
+# dose=loud (default): chunks=12,stall_mb=768,stall_s=0.25；thr=1.3；金标≈4.20
+# dose=quiet:          chunks=3,stall_mb=128,stall_s=0.05；thr=1.15；金标≈1.638（Loud 冻结规则只复测）
+# dose=masked:         chunks=1,stall_mb=64,stall_s=0.02；thr=1.05；金标≈1.259
 # Window [100,300]; mode=gpu_bound; victim local_rank=7.
+# Verdict: 分列自主 hang/slow flags vs 跨-run coll 中位比；勿误标 autonomous。
 # Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 CODE="${CODE:-/data/yinjinrun.p-huawei/lab-workspace/xputimer}"
 SO="${SO:-$CODE/libxpu_timer_ascend.so}"
 TBP="${TBP:-/tmp/tbp_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p1-sw-a-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p1-sw-a-quiet-${TS}}"
+  CHUNKS="${INLINE_2A_CHUNKS:-3}"
+  STALL_MB="${INLINE_2A_STALL_MB:-128}"
+  STALL_S="${INLINE_2A_STALL_S:-0.05}"
+  CASE_REF="${CASE_REF:-20260726_042922-yjr-as-c-p1-sw-a-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.638}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30270}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30271}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p1-sw-a-masked-${TS}}"
+  CHUNKS="${INLINE_2A_CHUNKS:-1}"
+  STALL_MB="${INLINE_2A_STALL_MB:-64}"
+  STALL_S="${INLINE_2A_STALL_S:-0.02}"
+  CASE_REF="${CASE_REF:-20260726_044454-yjr-as-c-p1-sw-a-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.259}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30272}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30273}"
+else
+  RUN="${RUN:-contrast-p1-sw-a-${TS}}"
+  CHUNKS="${INLINE_2A_CHUNKS:-12}"
+  STALL_MB="${INLINE_2A_STALL_MB:-768}"
+  STALL_S="${INLINE_2A_STALL_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_114556-yjr-as-c-p1-sw-a-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-4.20}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30270}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30271}"
+fi
+# Prefer AFS results when writable; fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-CHUNKS="${INLINE_2A_CHUNKS:-12}"
-STALL_MB="${INLINE_2A_STALL_MB:-768}"
-STALL_S="${INLINE_2A_STALL_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30270}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30271}"
 _local_ip() {
-  # Prefer eth0 / route src; avoid inheriting hold-job MASTER_ADDR (master-0).
   local ip=""
   if command -v ip >/dev/null 2>&1; then
     ip="$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -1)"
@@ -33,13 +68,18 @@ _local_ip() {
   if [[ -z "$ip" ]] && command -v hostname >/dev/null 2>&1; then
     ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
   fi
-  # Single-node torchrun accepts loopback; never use yysong-master-0 DNS.
   echo "${ip:-127.0.0.1}"
 }
 MASTER_ADDR="${FORCE_MASTER_ADDR:-$(_local_ip)}"
-CASE_REF="${CASE_REF:-20260725_114556-yjr-as-c-p1-sw-a-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
 
+# Ascend libs (bashrc sources these on interactive -lc; nohup/non-login needs explicit)
+set +u
+export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:${LD_LIBRARY_PATH:-}
+# shellcheck disable=SC1091
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# shellcheck disable=SC1091
+[[ -f /usr/local/Ascend/nnal/atb/set_env.sh ]] && source /usr/local/Ascend/nnal/atb/set_env.sh
+set -u
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
 export PYTHONUNBUFFERED=1
@@ -61,19 +101,18 @@ pkill -9 -f '[s]tress-ng' 2>/dev/null || true
 sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
-
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S}"
 echo "$RUN" > /tmp/xpu_p1swa_run.txt
 echo "$DUMP_ROOT" > /tmp/xpu_p1swa_dump.txt
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P1-SW-A
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-2
+pod: ${HOLD_POD}
 pool: pool-xpu
 mode: gpu_bound
 inject_kind: inline_2a
@@ -88,6 +127,7 @@ tool: XPUTimer
 label_prefix: yjr-as-b-xpu
 script: platform/ascend/xputimer/contrast_p1swa.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
+gold_step_ratio: ${GOLD_STEP_RATIO}
 EOF
 
 run_arm() {
@@ -101,7 +141,6 @@ run_arm() {
   export XPU_TIMER_HANG_TIMEOUT_MS=60000
   export XPU_TIMER_INJECT_STALL_MS=0
 
-  # clear inline inject for C0; enable 2a for C1
   unset INLINE_INJECT INLINE_VICTIM_LOCAL_RANK INLINE_INJECT_START INLINE_INJECT_STOP \
         INLINE_2A_CHUNKS INLINE_2A_STALL_MB INLINE_2A_STALL_S INLINE_HBM_MB INLINE_HBM_COPIES \
         INLINE_CUBE_SIZE INLINE_CUBE_MM INLINE_GC_EVERY INLINE_GC_STALL_S 2>/dev/null || true
@@ -118,6 +157,7 @@ run_arm() {
   echo "========== $arm port=$port inject=$do_inject 2a chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S} =========="
   rm -f "$out/node_0.done" "$out/node_0.fail"
   (
+    set +e
     LD_PRELOAD="$SO" \
     /root/miniconda3/envs/llm_test/bin/torchrun --nnodes=1 --nproc_per_node="$NPROC" --node_rank=0 \
       --master_addr="$MASTER_ADDR" --master_port="$port" \
@@ -127,6 +167,7 @@ run_arm() {
       --out-dir="$out/ranks" >"$out/node_0.log" 2>&1
     rc=$?
     if [[ $rc -eq 0 ]]; then touch "$out/node_0.done"; else echo $rc >"$out/node_0.fail"; fi
+    exit 0
   ) &
   local train_pid=$!
 
@@ -182,7 +223,6 @@ run_arm C0_baseline "$MASTER_PORT_C0" 0
 run_arm C1_inject_none "$MASTER_PORT_C1" 1
 
 VERDICT_PY="${VERDICT_PY:-$CODE/s4_verdict.py}"
-# exit 2 = no bite (still DONE); only fail if verdict writer itself crashes
 set +e
 python3 "$VERDICT_PY" \
   --c0 "$DUMP_ROOT/C0_baseline/xputimer" \
@@ -191,7 +231,8 @@ python3 "$VERDICT_PY" \
   --ranks-c1 "$DUMP_ROOT/C1_inject_none/ranks" \
   --case-id P1-SW-A \
   --case-ref "$CASE_REF" \
-  --dose-desc "INLINE 2a chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]" \
+  --dose "$DOSE" \
+  --dose-desc "INLINE 2a chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈${GOLD_STEP_RATIO}" \
   --accept-min-ratio "$ACCEPT_MIN_RATIO" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"

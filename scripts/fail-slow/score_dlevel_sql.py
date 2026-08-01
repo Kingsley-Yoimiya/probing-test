@@ -13,6 +13,15 @@ D4 规则（decisions A5）：
   - P1-EXT：优先 process.gpu_users / gpu.utilization；MetaX 缺表时 dump 同窗
     mx-smi（host_gpu.json）→ D4（host_mx_smi_hbm_bw / host_mx_smi_gpu_util）
   - P1-HW-B：同窗 mx-smi → D4（host_mx_smi_hbm_bw）；格 P1-HW
+  - P1-HW-A：同窗 mx-smi dpm/clock → D4（host_mx_smi_dpm_freq）；格 P1-HW
+  - P1-HW-C：同窗 mx-smi dpm/clock → D4（host_mx_smi_dpm_freq）；间歇叙事；
+    单次 dump 可能落在 PULSE_HIGH → no_hit；勿当恒定 1A；禁 injection.log 升 D4
+  - P3-HW-A：同窗 host_vmstat.json pgmajfault → D4（host_pgmajfault）；
+    其次 PSI memory；≠ EXT-C（勿用 host_psi_cpu 冒充 7A）；禁 injection.log 升 D4
+  - P3-HW-B：同窗 host_cpufreq.json scaling_max_freq 锁低 → D4（host_cpufreq）；
+    ≠ EXT-A stress_cpu / ≠ HW-A page；禁 injection.log 升 D4
+  - P3-HW-C：同窗 host_disk_lat.json dm-delay + O_DIRECT/iowait → D4（host_disk_lat）；
+    ≠ EXT-B stress_io / ≠ campaign ecc；禁 injection.log 升 D4
 绝不把 injection.log / 裸 pgrep 升为 D4。
 """
 from __future__ import annotations
@@ -66,6 +75,98 @@ def _host_psi_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str
     return False, f"SQL_NO_EXT_EVIDENCE:host_psi_no_hit:rate={rate}:thresh={thr}"
 
 
+def _host_cpufreq_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str]:
+    """P3-HW-B：dump 同窗 /sys cpufreq scaling_max（host_cpufreq.json）。"""
+    hf = manifest.get("host_cpufreq") or {}
+    paths = list(root.glob(f"{case}/**/C2_probing/probing/host_cpufreq.json"))
+    blob: dict = {}
+    if paths:
+        paths.sort(key=lambda p: (0 if "h14410" in str(p) else 1, str(p)))
+        try:
+            blob = json.loads(paths[0].read_text())
+        except Exception as exc:  # noqa: BLE001
+            return False, f"SQL_NO_EXT_EVIDENCE:host_cpufreq_unreadable:{exc}"
+    if not blob and hf:
+        blob = dict(hf)
+    if not blob:
+        return False, "SQL_NO_EXT_EVIDENCE:no_host_cpufreq"
+    evid = str(blob.get("evidence") or "host_cpufreq")
+    max0 = blob.get("cpu0_scaling_max_freq")
+    cur0 = blob.get("cpu0_scaling_cur_freq")
+    n_locked = blob.get("n_max_eq_target")
+    target = blob.get("target_khz")
+    if blob.get("hit"):
+        return True, (
+            f"{evid}:max_khz={max0}:cur_khz={cur0}"
+            f":n_locked={n_locked}:target_khz={target}"
+        )
+    return False, (
+        f"SQL_NO_EXT_EVIDENCE:{evid}"
+        f":max_khz={max0}:cur_khz={cur0}"
+        f":n_locked={n_locked}:target_khz={target}"
+    )
+
+
+def _host_disk_lat_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str]:
+    """P3-HW-C：dump 同窗 dm-delay + O_DIRECT/iowait（host_disk_lat.json）。"""
+    hd = manifest.get("host_disk_lat") or {}
+    paths = list(root.glob(f"{case}/**/C2_probing/probing/host_disk_lat.json"))
+    blob: dict = {}
+    if paths:
+        paths.sort(key=lambda p: (0 if "h14410" in str(p) else 1, str(p)))
+        try:
+            blob = json.loads(paths[0].read_text())
+        except Exception as exc:  # noqa: BLE001
+            return False, f"SQL_NO_EXT_EVIDENCE:host_disk_lat_unreadable:{exc}"
+    if not blob and hd:
+        blob = dict(hd)
+    if not blob:
+        return False, "SQL_NO_EXT_EVIDENCE:no_host_disk_lat"
+    evid = str(blob.get("evidence") or "host_disk_lat")
+    delay = blob.get("delay_ms_from_table")
+    od_per = blob.get("odirect_ms_per_read")
+    iowait_delta = blob.get("iowait_delta")
+    if blob.get("hit"):
+        return True, (
+            f"{evid}:dm_delay_ms={delay}"
+            f":odirect_ms_per_read={od_per}"
+            f":iowait_delta={iowait_delta}"
+        )
+    return False, (
+        f"SQL_NO_EXT_EVIDENCE:{evid}"
+        f":dm_delay_ms={delay}"
+        f":odirect_ms_per_read={od_per}"
+        f":iowait_delta={iowait_delta}"
+    )
+
+
+def _host_pgmaj_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str]:
+    """P3-HW-A：dump 同窗 /proc/vmstat pgmajfault（host_vmstat.json）。"""
+    hv = manifest.get("host_vmstat") or {}
+    paths = list(root.glob(f"{case}/**/C2_probing/probing/host_vmstat.json"))
+    blob: dict = {}
+    if paths:
+        paths.sort(key=lambda p: (0 if "h14410" in str(p) else 1, str(p)))
+        try:
+            blob = json.loads(paths[0].read_text())
+        except Exception as exc:  # noqa: BLE001
+            return False, f"SQL_NO_EXT_EVIDENCE:host_vmstat_unreadable:{exc}"
+    if not blob and hv:
+        blob = dict(hv)
+    if not blob:
+        return False, "SQL_NO_EXT_EVIDENCE:no_host_vmstat"
+    delta = blob.get("pgmajfault_delta")
+    rate = blob.get("pgmajfault_rate_per_s")
+    thr = blob.get("threshold_pgmaj_rate_per_s")
+    if blob.get("hit"):
+        return True, f"host_pgmajfault:delta={delta}:rate={rate}"
+    return False, (
+        f"SQL_NO_EXT_EVIDENCE:host_pgmajfault_no_hit"
+        f":delta={delta}:rate={rate}:thresh={thr}"
+        f":swap_kb={blob.get('swap_total_kb')}"
+    )
+
+
 def _host_gpu_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str]:
     """MetaX：dump 同窗 mx-smi（host_gpu.json），绕过缺失的 gpu.utilization。"""
     hg = manifest.get("host_gpu") or {}
@@ -85,6 +186,12 @@ def _host_gpu_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str
     if blob.get("hit"):
         if case in ("P1-EXT-B", "P1-HW-B"):
             return True, f"{evid}:hbm_bw_mbs={blob.get('hbm_bw_mbs')}"
+        if case in ("P1-HW-A", "P1-HW-C"):
+            return True, (
+                f"{evid}:xcore_dpm={blob.get('xcore_dpm_max')}"
+                f":xcore_mhz={blob.get('xcore_mhz')}"
+                f":board_power_w={blob.get('board_power_w')}"
+            )
         return True, (
             f"{evid}:util={blob.get('gpu_util_pct')}"
             f":n_procs={blob.get('n_procs')}"
@@ -94,6 +201,12 @@ def _host_gpu_evidence(root: Path, case: str, manifest: dict) -> tuple[bool, str
             f"SQL_NO_EXT_EVIDENCE:{evid}"
             f":hbm_bw_mbs={blob.get('hbm_bw_mbs')}"
             f":thresh={blob.get('threshold_hbm_bw_mbs')}"
+        )
+    if case in ("P1-HW-A", "P1-HW-C"):
+        return False, (
+            f"SQL_NO_EXT_EVIDENCE:{evid}"
+            f":xcore_dpm={blob.get('xcore_dpm_max')}"
+            f":xcore_mhz={blob.get('xcore_mhz')}"
         )
     return False, (
         f"SQL_NO_EXT_EVIDENCE:{evid}"
@@ -127,7 +240,7 @@ def ext_evidence(case: str, manifest: dict, root: Path) -> tuple[bool, str]:
     present = manifest.get("tables_present") or {}
     missing = manifest.get("tables_missing") or []
 
-    if case.startswith("P1-EXT") or case == "P1-HW-B":
+    if case.startswith("P1-EXT") or case in ("P1-HW-A", "P1-HW-B", "P1-HW-C"):
         # 理想路径：Probing GPU 表
         if present.get("process.gpu_users"):
             ok, _ = read_query_ok(root, case, "process_gpu_users")
@@ -138,7 +251,7 @@ def ext_evidence(case: str, manifest: dict, root: Path) -> tuple[bool, str]:
                 return True, "gpu.utilization_high"
             # 表在但行弱：仍可回落 mx-smi
         # MetaX 旁路：同窗 mx-smi（CudaBackend 起不来时表永不出现）
-        # P1-HW-B / P1-EXT-B：host_mx_smi_hbm_bw；P1-EXT-A：host_mx_smi_gpu_util
+        # P1-HW-A/C：host_mx_smi_dpm_freq；P1-HW-B / P1-EXT-B：hbm_bw；P1-EXT-A：gpu_util
         hg_hit, hg_note = _host_gpu_evidence(root, case, manifest)
         if hg_hit:
             return True, hg_note
@@ -193,6 +306,7 @@ def ext_evidence(case: str, manifest: dict, root: Path) -> tuple[bool, str]:
         return False, f"SQL_NO_EXT_EVIDENCE:p1sw_no_d4_path:{gap_note}"
 
     if case.startswith("P2-SW"):
+        # P2-SW-A（mccl_fallback / fabric_off 代理 5A）：主证 Loud=comm；
         # P2-SW-B：主证 Loud=comm_ratio+标定；D4 期望 python.comm_collective 时长抬升归因。
         # P2-SW-C（topo_5c）：主证 Loud=step；tables 可见 comm_collective / rdma.mlx_hca，
         # 但 dump 无 duration / HCA-order 归因查询；mx-smi/PSI 非 P2 主证。
@@ -205,7 +319,13 @@ def ext_evidence(case: str, manifest: dict, root: Path) -> tuple[bool, str]:
             has_comm = "comm_collective" in blob
             has_mlx = "mlx_hca" in blob
         hg = manifest.get("host_gpu") or {}
-        if case == "P2-SW-C":
+        if case == "P2-SW-A":
+            note = "mccl_fallback_no_sql_rootcause"
+            if has_comm:
+                note += ":comm_collective_present_no_duration_query"
+            if has_mlx:
+                note += ":mlx_hca_present_no_order_query"
+        elif case == "P2-SW-C":
             note = "topo_5c_no_sql_rootcause"
             if has_comm:
                 note += ":comm_collective_present_no_duration_query"
@@ -216,6 +336,55 @@ def ext_evidence(case: str, manifest: dict, root: Path) -> tuple[bool, str]:
         if hg.get("evidence"):
             note += f":host_gpu={hg.get('evidence')}"
         return False, f"SQL_NO_EXT_EVIDENCE:p2sw_no_d4_path:{note}"
+
+    if case == "P3-HW-A":
+        # OUTLINE 7A 换页/ECC 代理：主旁证 host_vmstat pgmajfault；
+        # 其次 PSI memory。≠ EXT-C：勿用 host_psi_cpu 升 D4；禁 injection.log。
+        pg_hit, pg_note = _host_pgmaj_evidence(root, case, manifest)
+        if pg_hit:
+            return True, pg_note
+        # PSI memory（memory.some）；MetaX SwapTotal=0 时常为 0
+        hp = manifest.get("host_pressure") or {}
+        paths = list(root.glob(f"{case}/**/C2_probing/probing/host_pressure.json"))
+        blob: dict = {}
+        if paths:
+            paths.sort(key=lambda p: (0 if "h14410" in str(p) else 1, str(p)))
+            try:
+                blob = json.loads(paths[0].read_text())
+            except Exception:  # noqa: BLE001
+                blob = {}
+        if not blob and hp:
+            blob = dict(hp)
+        mem_rate = blob.get("memory_some_rate_us_s")
+        mem_thr = blob.get("threshold_mem_rate_us_s") or blob.get("threshold_rate_us_s")
+        # 仅当 evidence 显式为 memory 或 memory rate 过阈才认 hit（勿把 cpu hit 冒充）
+        if blob.get("evidence") == "host_psi_memory" and blob.get("hit"):
+            return True, f"host_psi_memory:rate={mem_rate}"
+        if mem_rate is not None and mem_thr is not None and float(mem_rate) >= float(mem_thr):
+            return True, f"host_psi_memory:rate={mem_rate}"
+        cpu_note = ""
+        if blob.get("evidence") == "host_psi_cpu" and blob.get("hit"):
+            cpu_note = f":host_psi_cpu_present_not_7a_evidence:rate={blob.get('cpu_some_rate_us_s')}"
+        return False, (
+            f"{pg_note}:host_psi_memory_no_hit:rate={mem_rate}:thresh={mem_thr}"
+            f"{cpu_note}"
+        )
+
+    if case == "P3-HW-B":
+        # OUTLINE 7B 主机 CPU 温墙：主旁证 host_cpufreq scaling_max 锁低。
+        # ≠ EXT-A stress_cpu（勿用 PSI-cpu 冒充）；≠ HW-A page；禁 injection.log。
+        cf_hit, cf_note = _host_cpufreq_evidence(root, case, manifest)
+        if cf_hit:
+            return True, cf_note
+        return False, cf_note
+
+    if case == "P3-HW-C":
+        # OUTLINE 7C 本地盘读延迟：主旁证 host_disk_lat（dm-delay + O_DIRECT/iowait）。
+        # ≠ EXT-B stress_io（勿用 fio/PSI-io 冒充）；≠ campaign ecc；禁 injection.log。
+        dl_hit, dl_note = _host_disk_lat_evidence(root, case, manifest)
+        if dl_hit:
+            return True, dl_note
+        return False, dl_note
 
     if case.startswith("P3-SW"):
         # 训练进程内泄漏：Probing 无 process.memory；用 cpu.utilization.rss_kb
@@ -272,8 +441,14 @@ def ext_evidence(case: str, manifest: dict, root: Path) -> tuple[bool, str]:
     return False, "unsupported_case"
 
 
-def score_with_sql(root: Path, case: str, dose: str) -> dict:
-    base = score_case(root, case, dose)
+def score_with_sql(
+    root: Path,
+    case: str,
+    dose: str,
+    *,
+    recipes_path: str | Path | None = None,
+) -> dict:
+    base = score_case(root, case, dose, recipes_path=recipes_path)
     # normalize d_level to int then string label
     d_num = int(base.get("d_level") or 0)
     manifest = load_manifest(root, case)
@@ -325,6 +500,11 @@ def main() -> None:
     ap.add_argument("--result-root", required=True)
     ap.add_argument("--cases", default="P1-EXT-A,P1-EXT-B,P3-EXT-A")
     ap.add_argument("--dose", default="Loud")
+    ap.add_argument(
+        "--recipes",
+        default=None,
+        help="dose_recipes.yaml；传给 offline score（rare_seq / accept_min_ratio）",
+    )
     args = ap.parse_args()
     root = Path(args.result_root)
     run_id = root.name
@@ -332,7 +512,7 @@ def main() -> None:
 
     rows = []
     for case in cases:
-        r = score_with_sql(root, case, args.dose)
+        r = score_with_sql(root, case, args.dose, recipes_path=args.recipes)
         r["run_id"] = run_id
         r["case"] = r.get("case_id", case)
         rows.append(r)

@@ -1,32 +1,66 @@
 #!/usr/bin/env bash
-# P1-SW-A Loud contrast on yysong-worker-1: INLINE 2a mem-frag + Greyhound collect-min.
-# Frozen dose (dose_recipes calibrated):
-#   chunks=12,stall_mb=768,stall_s=0.25
+# P1-SW-A contrast: INLINE 2a mem-frag + Greyhound collect-min.
+# dose=loud (default): chunks=12,stall_mb=768,stall_s=0.25；thr=1.3；金标≈4.20
+# dose=quiet:          chunks=3,stall_mb=128,stall_s=0.05；thr=1.15；金标≈1.638（Loud 冻结规则只复测）
+# dose=masked:         chunks=1,stall_mb=64,stall_s=0.02；thr=1.05；金标≈1.259（Loud 冻结规则只复测）
 # Window [100,300]; mode=gpu_bound; victim local_rank=7.
+# LD_PRELOAD = cyclecounter stub : libhcclprobe.so
 # Verdict: collect_seq 真实 per-rank + Rbeast + C0 假阳性对照（不改对手阈值）。
-# Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
+# Hold pod 默认今晚 GH 池 yysong-worker-2（勿用 master / grj）。
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 SO="${SO:-/data/yinjinrun.p-huawei/probe-bundle/greyhound/libhcclprobe.so}"
 STUB="${STUB:-/data/yinjinrun.p-huawei/opt/rbeast-fix/libbuiltin_readcyclecounter.so}"
 TBP="${TBP:-/data/yinjinrun.p-huawei/probe-bundle/train_bench_probe_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p1-sw-a-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p1-sw-a-quiet-${TS}}"
+  CHUNKS="${INLINE_2A_CHUNKS:-3}"
+  STALL_MB="${INLINE_2A_STALL_MB:-128}"
+  STALL_S="${INLINE_2A_STALL_S:-0.05}"
+  CASE_REF="${CASE_REF:-20260726_042922-yjr-as-c-p1-sw-a-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.638}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30370}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30371}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p1-sw-a-masked-${TS}}"
+  CHUNKS="${INLINE_2A_CHUNKS:-1}"
+  STALL_MB="${INLINE_2A_STALL_MB:-64}"
+  STALL_S="${INLINE_2A_STALL_S:-0.02}"
+  CASE_REF="${CASE_REF:-20260726_044454-yjr-as-c-p1-sw-a-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.259}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30372}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30373}"
+else
+  RUN="${RUN:-contrast-p1-sw-a-${TS}}"
+  CHUNKS="${INLINE_2A_CHUNKS:-12}"
+  STALL_MB="${INLINE_2A_STALL_MB:-768}"
+  STALL_S="${INLINE_2A_STALL_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_114556-yjr-as-c-p1-sw-a-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-4.20}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30370}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30371}"
+fi
+# Prefer AFS results when writable (hold pod may lack /data write); fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-CHUNKS="${INLINE_2A_CHUNKS:-12}"
-STALL_MB="${INLINE_2A_STALL_MB:-768}"
-STALL_S="${INLINE_2A_STALL_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30370}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30371}"
 MASTER_ADDR="${MASTER_ADDR:-}"
-CASE_REF="${CASE_REF:-20260725_114556-yjr-as-c-p1-sw-a-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
 
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
@@ -47,10 +81,10 @@ export HCCL_CONNECT_TIMEOUT=${HCCL_CONNECT_TIMEOUT:-1800}
 export HOST_BOUND_MATMUL=${HOST_BOUND_MATMUL:-768}
 export CKPT_DIR="${CKPT_DIR:-/data/yinjinrun.p-huawei/probe-bundle/ckpt}"
 export PROBING=0
-export LD_LIBRARY_PATH="/tmp/stress_bundle:/usr/local/Ascend/cann-8.5.0/aarch64-linux/lib64:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="/tmp/stress_bundle:/usr/local/Ascend/cann-8.5.0/aarch64-linux/lib64:/usr/local/Ascend/driver/lib64/driver:/usr/local/Ascend/driver/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 unset PROBING_TORCH_PROFILING PROBING_GPU INLINE_INJECT 2>/dev/null || true
 
-# Volcano 壳常注入 MASTER_ADDR=yysong-master-0；单 pod 对照必须用本机 eth0 / 127.0.0.1
+# Volcano 壳常注入 MASTER_ADDR=yysong-master-0；单 pod 对照必须用本机 / 127.0.0.1
 if [[ -z "${MASTER_ADDR:-}" || "$MASTER_ADDR" == *master* || "$MASTER_ADDR" == *yysong-master* ]]; then
   MASTER_ADDR=$(ip -4 -o addr show eth0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1 || true)
   if [[ -z "$MASTER_ADDR" ]]; then
@@ -58,20 +92,22 @@ if [[ -z "${MASTER_ADDR:-}" || "$MASTER_ADDR" == *master* || "$MASTER_ADDR" == *
   fi
   MASTER_ADDR=${MASTER_ADDR:-127.0.0.1}
 fi
+# 硬约束：Loop 要求 MASTER_ADDR=127.0.0.1（单机 16 卡）
+MASTER_ADDR="${FORCE_MASTER_ADDR:-127.0.0.1}"
 
 test -f "$SO" || { echo "missing $SO"; exit 2; }
 test -f "$STUB" || { echo "missing cyclecounter stub $STUB"; exit 2; }
 test -f "$TBP" || { echo "missing $TBP"; exit 2; }
 
-# only kill OUR leftovers on worker-1
+# only kill OUR leftovers on this hold pod
 pkill -9 -x stress-ng 2>/dev/null || true
 pkill -9 -f '[t]bp_npu.py' 2>/dev/null || true
 pkill -9 -f '[t]orchrun.*tbp_npu' 2>/dev/null || true
+pkill -9 -f '[t]rain_bench_probe_npu' 2>/dev/null || true
 sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
-
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S}"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S}"
 echo "$RUN" > /tmp/gh_p1swa_run.txt
 echo "$DUMP_ROOT" > /tmp/gh_p1swa_dump.txt
 
@@ -82,12 +118,12 @@ fi
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P1-SW-A
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-1
+pod: ${HOLD_POD}
 pool: pool-gh
 mode: gpu_bound
 inject_kind: inline_2a
@@ -105,6 +141,8 @@ redis: 127.0.0.1:16379
 fairness: collect_seq_real_per_rank + C0_fp_control
 script: platform/ascend/greyhound/contrast_p1swa.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
+gold_step_ratio: ${GOLD_STEP_RATIO}
+master_addr: ${MASTER_ADDR}
 EOF
 
 run_arm() {
@@ -205,7 +243,7 @@ run_arm C1_inject_none "$MASTER_PORT_C1" 1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="/data/yinjinrun.p-huawei/opt/pydeps${PYTHONPATH:+:$PYTHONPATH}"
 export GREYHOUND_RBEAST_STUB="${STUB}"
-DOSE_DESC="INLINE 2a chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]"
+DOSE_DESC="INLINE 2a chunks=${CHUNKS} stall_mb=${STALL_MB} stall_s=${STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈${GOLD_STEP_RATIO}"
 LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   /root/miniconda3/envs/llm_test/bin/python3 "$SCRIPT_DIR/s4_verdict.py" \
   --dump-root "$DUMP_ROOT" \
@@ -215,9 +253,10 @@ LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   --case-id P1-SW-A \
   --case-ref "$CASE_REF" \
   --dose-desc "$DOSE_DESC" \
+  --dose "$DOSE" \
   --tool greyhound \
   --run-id "$RUN" \
-  --pod yysong-worker-1 \
+  --pod "$HOLD_POD" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"
 echo "CONTRAST_DONE RUN=$RUN DUMP=$DUMP_ROOT"

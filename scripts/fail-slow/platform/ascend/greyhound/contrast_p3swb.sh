@@ -1,33 +1,59 @@
 #!/usr/bin/env bash
-# P3-SW-B Loud contrast on yysong-worker-1: INLINE 8b leak/stall + Greyhound collect-min.
-# Frozen dose (dose_recipes calibrated):
-#   mb=16,stall_s=0.25  → INLINE_8B_MB / INLINE_8B_STALL_S
+# P3-SW-B contrast: INLINE 8b leak/stall + Greyhound collect-min.
+# dose=loud (default): mb=16,stall_s=0.25；thr=1.3；金标≈2.06
+# dose=quiet:          mb=8,stall_s=0.1；thr=1.15；金标≈2.101（Loud 冻结规则只复测）
+# dose=masked:         mb=6,stall_s=0.1；thr=1.05；金标≈1.909（Loud 冻结规则只复测）
 # Window [100,300]; mode=host_bound; victim local_rank=7.
-# Gold: C1/C0 step_ms≈2.06 (host_bound 8b).
 # Verdict: collect_seq 真实 per-rank + Rbeast + C0 假阳性对照（不改对手阈值）。
-# Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong); force 127.0.0.1.
+# Hold pod 默认今晚 GH 池 yysong-worker-2（勿用 master / grj）。
+# Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 SO="${SO:-/data/yinjinrun.p-huawei/probe-bundle/greyhound/libhcclprobe.so}"
 STUB="${STUB:-/data/yinjinrun.p-huawei/opt/rbeast-fix/libbuiltin_readcyclecounter.so}"
 TBP="${TBP:-/data/yinjinrun.p-huawei/probe-bundle/train_bench_probe_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p3-sw-b-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p3-sw-b-quiet-${TS}}"
+  LEAK_MB="${INLINE_8B_MB:-8}"
+  STALL_S="${INLINE_8B_STALL_S:-0.1}"
+  CASE_REF="${CASE_REF:-20260725_232814-yjr-as-c-p3-sw-b-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-2.101}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p3-sw-b-masked-${TS}}"
+  LEAK_MB="${INLINE_8B_MB:-6}"
+  STALL_S="${INLINE_8B_STALL_S:-0.1}"
+  CASE_REF="${CASE_REF:-20260726_000113-yjr-as-c-p3-sw-b-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.909}"
+else
+  RUN="${RUN:-contrast-p3-sw-b-${TS}}"
+  LEAK_MB="${INLINE_8B_MB:-16}"
+  STALL_S="${INLINE_8B_STALL_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_125558-yjr-as-c-p3-sw-b-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-2.06}"
+fi
+# Prefer AFS results when writable (hold pod may lack /data write); fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-LEAK_MB="${INLINE_8B_MB:-16}"
-STALL_S="${INLINE_8B_STALL_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
 MASTER_PORT_C0="${MASTER_PORT_C0:-30370}"
 MASTER_PORT_C1="${MASTER_PORT_C1:-30371}"
-# Hard constraint: single-pod contrast must not inherit yysong-master-0
-MASTER_ADDR="${MASTER_ADDR:-127.0.0.1}"
-CASE_REF="${CASE_REF:-20260725_125558-yjr-as-c-p3-sw-b-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+MASTER_ADDR="${MASTER_ADDR:-}"
 
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
@@ -41,16 +67,17 @@ export PROBING=0
 export LD_LIBRARY_PATH="/tmp/stress_bundle:/usr/local/Ascend/cann-8.5.0/aarch64-linux/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 unset PROBING_TORCH_PROFILING PROBING_GPU INLINE_INJECT 2>/dev/null || true
 
-# Volcano 壳常注入 MASTER_ADDR=yysong-master-0；单 pod 对照强制本机回环
+# Volcano 壳常注入 MASTER_ADDR=yysong-master-0；单 pod 对照必须用本机 eth0
 if [[ -z "${MASTER_ADDR:-}" || "$MASTER_ADDR" == *master* || "$MASTER_ADDR" == *yysong-master* ]]; then
-  MASTER_ADDR=127.0.0.1
+  MASTER_ADDR=$(ip -4 -o addr show eth0 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -1 || true)
+  MASTER_ADDR=${MASTER_ADDR:-127.0.0.1}
 fi
 
 test -f "$SO" || { echo "missing $SO"; exit 2; }
 test -f "$STUB" || { echo "missing cyclecounter stub $STUB"; exit 2; }
 test -f "$TBP" || { echo "missing $TBP"; exit 2; }
 
-# only kill OUR leftovers on worker-1
+# only kill OUR leftovers on this hold pod
 pkill -9 -x stress-ng 2>/dev/null || true
 pkill -9 -f '[t]bp_npu.py' 2>/dev/null || true
 pkill -9 -f '[t]orchrun.*tbp_npu' 2>/dev/null || true
@@ -58,7 +85,7 @@ sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN mb=${LEAK_MB} stall_s=${STALL_S}"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} mb=${LEAK_MB} stall_s=${STALL_S}"
 echo "$RUN" > /tmp/gh_p3swb_run.txt
 echo "$DUMP_ROOT" > /tmp/gh_p3swb_dump.txt
 
@@ -69,12 +96,12 @@ fi
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P3-SW-B
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-1
+pod: ${HOLD_POD}
 pool: pool-gh
 mode: host_bound
 inject_kind: inline_8b
@@ -92,7 +119,7 @@ redis: 127.0.0.1:16379
 fairness: collect_seq_real_per_rank + C0_fp_control
 script: platform/ascend/greyhound/contrast_p3swb.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
-gold_step_ratio: 2.06
+gold_step_ratio: ${GOLD_STEP_RATIO}
 master_addr: ${MASTER_ADDR}
 EOF
 
@@ -193,7 +220,7 @@ run_arm C1_inject_none "$MASTER_PORT_C1" 1
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export PYTHONPATH="/data/yinjinrun.p-huawei/opt/pydeps${PYTHONPATH:+:$PYTHONPATH}"
 export GREYHOUND_RBEAST_STUB="${STUB}"
-DOSE_DESC="INLINE 8b mb=${LEAK_MB} stall_s=${STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈2.06"
+DOSE_DESC="INLINE 8b mb=${LEAK_MB} stall_s=${STALL_S} victim=${VICTIM_LOCAL}; window [${INJECT_START},${INJECT_STOP}]; gold≈${GOLD_STEP_RATIO}"
 LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   /root/miniconda3/envs/llm_test/bin/python3 "$SCRIPT_DIR/s4_verdict.py" \
   --dump-root "$DUMP_ROOT" \
@@ -203,9 +230,10 @@ LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   --case-id P3-SW-B \
   --case-ref "$CASE_REF" \
   --dose-desc "$DOSE_DESC" \
+  --dose "$DOSE" \
   --tool greyhound \
   --run-id "$RUN" \
-  --pod yysong-worker-1 \
+  --pod "$HOLD_POD" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"
 echo "CONTRAST_DONE RUN=$RUN DUMP=$DUMP_ROOT"

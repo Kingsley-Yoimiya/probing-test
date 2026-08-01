@@ -22,15 +22,62 @@ mkdir -p "$DUMP"
 MANIFEST="$DUMP/query_manifest.json"
 TS=$(date -Iseconds)
 
-# 候选 PID：victim local_rank 优先，再扫全部 tbp worker
+read_local_rank() {
+  local pid="$1"
+  tr '\0' '\n' < "/proc/${pid}/environ" 2>/dev/null | awk -F= '$1=="LOCAL_RANK"{print $2; exit}'
+}
+
+is_torchrun_launcher() {
+  local pid="$1"
+  local args
+  args=$(ps -p "$pid" -o args= 2>/dev/null || true)
+  echo "$args" | grep -qE 'torch\.distributed\.run|distributed/run\.py'
+}
+
+# 候选 PID：排除 torchrun launcher；worker 从 /proc/$pid/environ 读 LOCAL_RANK。
+# 优先 victim rank，再优先已有 python.torch_trace shm 环的 pid。
 candidate_pids() {
   local prefer="$1"
-  ps -eo pid,args | awk -v lr="$prefer" '
-    /train_bench_probe|\/tmp\/tbp(_npu)?\.py/ && $0 !~ /awk/ && $0 !~ /bash/ {
-      score = 1
-      if ($0 ~ ("local[_-]rank[= ]*" lr) || $0 ~ ("LOCAL_RANK=" lr)) score = 0
-      print score, $1
-    }' | sort -n | awk '{print $2}'
+  ps -eo pid,args | awk '
+    /\/tmp\/tbp(_npu)?\.py|train_bench_probe/ && $0 !~ /awk/ && $0 !~ /bash/ && $0 !~ /torchrun/ && $0 !~ /distributed\/run\.py/ {
+      print $1
+    }' | while read -r pid; do
+    [ -z "${pid:-}" ] && continue
+    [ -d "/proc/$pid" ] || continue
+    score=100
+    lr=$(read_local_rank "$pid")
+    if [ -n "$lr" ]; then
+      score=$((score - 10))
+      if [ "$lr" = "$prefer" ]; then
+        score=$((score - 40))
+      fi
+    fi
+    if [ -f "/dev/shm/probing/${pid}/python.torch_trace" ]; then
+      score=$((score - 50))
+    fi
+    printf '%s %s\n' "$score" "$pid"
+  done | sort -n | awk '{print $2}'
+}
+
+pid_role() {
+  local pid="$1"
+  if is_torchrun_launcher "$pid"; then
+    echo "launcher"
+    return
+  fi
+  local lr
+  lr=$(read_local_rank "$pid")
+  if [ -n "$lr" ]; then
+    echo "worker:local_rank=${lr}"
+    return
+  fi
+  local args
+  args=$(ps -p "$pid" -o args= 2>/dev/null || true)
+  if echo "$args" | grep -qE '/tmp/tbp|train_bench_probe'; then
+    echo "worker:local_rank=?"
+  else
+    echo "unknown"
+  fi
 }
 
 probe_alive() {
@@ -41,15 +88,17 @@ probe_alive() {
 
 PID=""
 ATTACH="no"
+PID_ROLE="none"
 for cand in $(candidate_pids "$VICTIM_LOCAL_RANK"); do
   if probe_alive "$cand"; then
     PID="$cand"
     ATTACH="ok"
+    PID_ROLE=$(pid_role "$cand")
     break
   fi
 done
 
-echo "dump_probing_sql case=$CASE out=$DUMP pid=${PID:-none} attach=$ATTACH ts=$TS" | tee "$DUMP/dump.log"
+echo "dump_probing_sql case=$CASE out=$DUMP pid=${PID:-none} attach=$ATTACH pid_role=${PID_ROLE} ts=$TS" | tee "$DUMP/dump.log"
 
 # Host PSI（系统级 CPU 压力）：不依赖进程表，作 P3 EXT 旁路证据（非 injection.log）
 sample_pressure_block() {
@@ -307,8 +356,10 @@ else
 fi
 
 run_q show_tables "SHOW TABLES" || true
+run_q torch_trace_count \
+  "SELECT COUNT(*) AS n, MIN(global_step) AS gmin, MAX(global_step) AS gmax FROM python.torch_trace" || true
 run_q torch_trace_tail \
-  "SELECT timestamp, step, module, stage, duration, allocated FROM python.torch_trace ORDER BY timestamp DESC LIMIT 50" || true
+  "SELECT timestamp, global_step, local_step, module, stage, duration, allocated FROM python.torch_trace ORDER BY timestamp DESC LIMIT 50" || true
 run_q gpu_util \
   "SELECT ts, device_id, name, gpu_util_pct, mem_used_pct, used_bytes FROM gpu.utilization ORDER BY ts DESC LIMIT 100" || true
 run_q cpu_util \
@@ -361,6 +412,11 @@ needed = {
     "process.gpu_users": has("process", "gpu_users"),
     "process.cpu_stats": has("process", "cpu_stats"),
 }
+# torch_trace: prefer COUNT query success over SHOW TABLES (table may be mmap-only)
+if status.get("torch_trace_count") == "ok":
+    needed["python.torch_trace"] = True
+if status.get("torch_trace_tail") == "ok":
+    needed["python.torch_trace"] = True
 missing = [k for k, ok in needed.items() if not ok]
 hp = {}
 hp_path = dump / "host_pressure.json"
@@ -379,6 +435,7 @@ if hg_path.is_file():
 manifest = {
     "case": "$CASE",
     "pid": "${PID:-}",
+    "pid_role": "${PID_ROLE}",
     "attach": "$ATTACH",
     "ts": "$TS",
     "victim_local_rank": int("$VICTIM_LOCAL_RANK"),

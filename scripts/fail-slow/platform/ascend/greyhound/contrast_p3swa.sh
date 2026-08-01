@@ -1,31 +1,49 @@
 #!/usr/bin/env bash
-# P3-SW-A Loud contrast on yysong-worker-1: INLINE 8a GC/stall + Greyhound collect-min.
-# Frozen dose (dose_recipes calibrated):
-#   inline_gc_every=1,inline_gc_stall_s=0.25
+# P3-SW-A contrast: INLINE 8a GC/stall + Greyhound collect-min.
+# dose=loud (default): inline_gc_every=1,inline_gc_stall_s=0.25；thr=1.3
+# dose=quiet:          inline_gc_every=1,inline_gc_stall_s=0.1；thr=1.15（Loud 冻结规则只复测）
+# dose=masked:         inline_gc_every=1,inline_gc_stall_s=0.05；thr=1.05（calibrated formal D4）
 # Window [100,300]; mode=host_bound; victim local_rank=7.
 # Verdict: collect_seq 真实 per-rank + Rbeast + C0 假阳性对照（不改对手阈值）。
+# Hold pod 默认今晚 GH 池 yysong-worker-2（勿用 master）。
 # Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 SO="${SO:-/data/yinjinrun.p-huawei/probe-bundle/greyhound/libhcclprobe.so}"
 STUB="${STUB:-/data/yinjinrun.p-huawei/opt/rbeast-fix/libbuiltin_readcyclecounter.so}"
 TBP="${TBP:-/data/yinjinrun.p-huawei/probe-bundle/train_bench_probe_npu.py}"
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p3-sw-a-${TS}}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p3-sw-a-quiet-${TS}}"
+  GC_EVERY="${INLINE_GC_EVERY:-1}"
+  GC_STALL_S="${INLINE_GC_STALL_S:-0.1}"
+  CASE_REF="${CASE_REF:-20260725_215903-yjr-as-c-p3-sw-a-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p3-sw-a-masked-${TS}}"
+  GC_EVERY="${INLINE_GC_EVERY:-1}"
+  GC_STALL_S="${INLINE_GC_STALL_S:-0.05}"
+  CASE_REF="${CASE_REF:-20260725_224156-yjr-as-c-p3-sw-a-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+else
+  RUN="${RUN:-contrast-p3-sw-a-${TS}}"
+  GC_EVERY="${INLINE_GC_EVERY:-1}"
+  GC_STALL_S="${INLINE_GC_STALL_S:-0.25}"
+  CASE_REF="${CASE_REF:-20260725_012957-yjr-as-c-p3-sw-a-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+fi
 DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/greyhound/$RUN}"
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-GC_EVERY="${INLINE_GC_EVERY:-1}"
-GC_STALL_S="${INLINE_GC_STALL_S:-0.25}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30360}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30361}"
+MASTER_PORT_C0="${MASTER_PORT_C0:-30370}"
+MASTER_PORT_C1="${MASTER_PORT_C1:-30371}"
 MASTER_ADDR="${MASTER_ADDR:-}"
-CASE_REF="${CASE_REF:-20260725_012957-yjr-as-c-p3-sw-a-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
 
 source /root/miniconda3/etc/profile.d/conda.sh
 conda activate llm_test
@@ -49,7 +67,7 @@ test -f "$SO" || { echo "missing $SO"; exit 2; }
 test -f "$STUB" || { echo "missing cyclecounter stub $STUB"; exit 2; }
 test -f "$TBP" || { echo "missing $TBP"; exit 2; }
 
-# only kill OUR leftovers on worker-1
+# only kill OUR leftovers on this hold pod
 pkill -9 -x stress-ng 2>/dev/null || true
 pkill -9 -f '[t]bp_npu.py' 2>/dev/null || true
 pkill -9 -f '[t]orchrun.*tbp_npu' 2>/dev/null || true
@@ -57,7 +75,7 @@ sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN gc_every=${GC_EVERY} stall_s=${GC_STALL_S}"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD} gc_every=${GC_EVERY} stall_s=${GC_STALL_S}"
 echo "$RUN" > /tmp/gh_p3swa_run.txt
 echo "$DUMP_ROOT" > /tmp/gh_p3swa_dump.txt
 
@@ -68,12 +86,12 @@ fi
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P3-SW-A
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-1
+pod: ${HOLD_POD}
 pool: pool-gh
 mode: host_bound
 inject_kind: inline_8a
@@ -200,9 +218,10 @@ LD_PRELOAD="${STUB}${LD_PRELOAD:+:$LD_PRELOAD}" \
   --case-id P3-SW-A \
   --case-ref "$CASE_REF" \
   --dose-desc "$DOSE_DESC" \
+  --dose "$DOSE" \
   --tool greyhound \
   --run-id "$RUN" \
-  --pod yysong-worker-1 \
+  --pod "$HOLD_POD" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"
 echo "CONTRAST_DONE RUN=$RUN DUMP=$DUMP_ROOT"

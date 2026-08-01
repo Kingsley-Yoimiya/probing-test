@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# P3-SW-C Loud contrast on yysong-worker-2: sidecar 8c (stress-ng+leak) + XPUTimer preload.
-# Frozen dose (dose_recipes calibrated):
-#   cpu_n=nproc,cpu_load=90,mb=1,leak_every=1.0,max_chunks=64
+# P3-SW-C contrast on yysong-worker-2: sidecar 8c (stress-ng+leak) + XPUTimer preload.
+# dose=loud (default): cpu_n=nproc,cpu_load=90,mb=1,leak_every=1.0,max_chunks=64；thr=1.3；金标≈2.49/2.33
+# dose=quiet:          cpu_n=80,cpu_load=70,mb=1,leak_every=2.0,max_chunks=32；thr=1.15；金标≈1.95（formal `125953`）
+# dose=masked:         =quiet lean cpu_n=80,cpu_load=70,mb=1,leak_every=2.0,max_chunks=32；thr=1.05；金标≈1.649（formal `135016`）
 # Window [100,300]; mode=host_bound.
-# Gold: C1/C0 step_ms≈2.49 (host_bound 8c).
+# Verdict: 分列自主 hang/slow flags vs 跨-run coll 中位比；勿误标 autonomous。
+# Hold pod 默认 yysong-worker-2（勿用 master / grj）。
 # Do NOT inherit hold-job MASTER_ADDR (often yysong-master-0.yysong).
 set -euo pipefail
 
+DOSE="${DOSE:-loud}"
+HOLD_POD="${HOLD_POD:-yysong-worker-2}"
 CODE="${CODE:-/data/yinjinrun.p-huawei/lab-workspace/xputimer}"
 SO="${SO:-$CODE/libxpu_timer_ascend.so}"
 TBP="${TBP:-/tmp/tbp_npu.py}"
@@ -22,22 +26,58 @@ else
   STRESS_BIN=""
 fi
 TS="$(date +%Y%m%d_%H%M%S)"
-RUN="${RUN:-contrast-p3-sw-c-${TS}}"
-DUMP_ROOT="${DUMP_ROOT:-/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN}"
+if [[ "$DOSE" == "quiet" ]]; then
+  RUN="${RUN:-contrast-p3-sw-c-quiet-${TS}}"
+  SIDECAR_8C_CPU_N="${SIDECAR_8C_CPU_N:-80}"
+  SIDECAR_8C_CPU_LOAD="${SIDECAR_8C_CPU_LOAD:-70}"
+  SIDECAR_8C_MB="${SIDECAR_8C_MB:-1}"
+  SIDECAR_8C_LEAK_EVERY="${SIDECAR_8C_LEAK_EVERY:-2.0}"
+  SIDECAR_8C_MAX_CHUNKS="${SIDECAR_8C_MAX_CHUNKS:-32}"
+  CASE_REF="${CASE_REF:-20260726_125953-yjr-as-c-p3-sw-c-quiet}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.15}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.95}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30430}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30431}"
+elif [[ "$DOSE" == "masked" ]]; then
+  RUN="${RUN:-contrast-p3-sw-c-masked-${TS}}"
+  SIDECAR_8C_CPU_N="${SIDECAR_8C_CPU_N:-80}"
+  SIDECAR_8C_CPU_LOAD="${SIDECAR_8C_CPU_LOAD:-70}"
+  SIDECAR_8C_MB="${SIDECAR_8C_MB:-1}"
+  SIDECAR_8C_LEAK_EVERY="${SIDECAR_8C_LEAK_EVERY:-2.0}"
+  SIDECAR_8C_MAX_CHUNKS="${SIDECAR_8C_MAX_CHUNKS:-32}"
+  CASE_REF="${CASE_REF:-20260726_135016-yjr-as-c-p3-sw-c-masked}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.05}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-1.649}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30432}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30433}"
+else
+  RUN="${RUN:-contrast-p3-sw-c-${TS}}"
+  # empty SIDECAR_8C_CPU_N → sidecar defaults to nproc
+  SIDECAR_8C_CPU_N="${SIDECAR_8C_CPU_N:-}"
+  SIDECAR_8C_CPU_LOAD="${SIDECAR_8C_CPU_LOAD:-90}"
+  SIDECAR_8C_MB="${SIDECAR_8C_MB:-1}"
+  SIDECAR_8C_LEAK_EVERY="${SIDECAR_8C_LEAK_EVERY:-1.0}"
+  SIDECAR_8C_MAX_CHUNKS="${SIDECAR_8C_MAX_CHUNKS:-64}"
+  CASE_REF="${CASE_REF:-20260725_135238-yjr-as-c-p3-sw-c-loud}"
+  ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+  GOLD_STEP_RATIO="${GOLD_STEP_RATIO:-2.49}"
+  MASTER_PORT_C0="${MASTER_PORT_C0:-30280}"
+  MASTER_PORT_C1="${MASTER_PORT_C1:-30281}"
+fi
+# Prefer AFS results when writable (hold pod may lack /data write); fallback /data
+if [[ -z "${DUMP_ROOT:-}" ]]; then
+  if [[ -d /afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais ]]; then
+    DUMP_ROOT="/afs-a3-weight-share/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  else
+    DUMP_ROOT="/data/yinjinrun.p-huawei/results/ascend-ais/baseline/xputimer/$RUN"
+  fi
+fi
 NPROC="${NPROC:-16}"
 ITERS="${ITERS:-500}"
 WARMUP="${WARMUP:-50}"
 INJECT_START="${INJECT_START:-100}"
 INJECT_STOP="${INJECT_STOP:-300}"
-# empty SIDECAR_8C_CPU_N → sidecar defaults to nproc
-SIDECAR_8C_CPU_N="${SIDECAR_8C_CPU_N:-}"
-SIDECAR_8C_CPU_LOAD="${SIDECAR_8C_CPU_LOAD:-90}"
-SIDECAR_8C_MB="${SIDECAR_8C_MB:-1}"
-SIDECAR_8C_LEAK_EVERY="${SIDECAR_8C_LEAK_EVERY:-1.0}"
-SIDECAR_8C_MAX_CHUNKS="${SIDECAR_8C_MAX_CHUNKS:-64}"
 VICTIM_LOCAL="${VICTIM_LOCAL:-7}"
-MASTER_PORT_C0="${MASTER_PORT_C0:-30280}"
-MASTER_PORT_C1="${MASTER_PORT_C1:-30281}"
 _local_ip() {
   # Prefer eth0 / route src; avoid inheriting hold-job MASTER_ADDR (master-0).
   local ip=""
@@ -52,8 +92,8 @@ _local_ip() {
   echo "${ip:-127.0.0.1}"
 }
 MASTER_ADDR="${FORCE_MASTER_ADDR:-$(_local_ip)}"
-CASE_REF="${CASE_REF:-20260725_135238-yjr-as-c-p3-sw-c-loud}"
-ACCEPT_MIN_RATIO="${ACCEPT_MIN_RATIO:-1.3}"
+# 硬约束：单机 16 卡对照优先 loopback（与 GH quiet 一致）
+MASTER_ADDR="${FORCE_MASTER_ADDR:-127.0.0.1}"
 
 # Ascend libs (bashrc sources these on interactive -lc; nohup/non-login needs explicit)
 # set_env.sh references unset vars — temporarily relax nounset
@@ -80,6 +120,12 @@ export CKPT_DIR="${CKPT_DIR:-/data/yinjinrun.p-huawei/probe-bundle/ckpt}"
 export PROBING=0
 unset PROBING_TORCH_PROFILING PROBING_GPU INLINE_INJECT 2>/dev/null || true
 
+if [[ ! -f "$TBP" ]]; then
+  TBP="/data/yinjinrun.p-huawei/probe-bundle/train_bench_probe_npu.py"
+fi
+if [[ ! -f "$SIDECAR_PY" ]]; then
+  SIDECAR_PY="/data/yinjinrun.p-huawei/probe-bundle/sidecar_inject_8c.py"
+fi
 test -f "$SO" || { echo "missing $SO"; exit 2; }
 test -f "$TBP" || { echo "missing $TBP"; exit 2; }
 test -f "$SIDECAR_PY" || { echo "missing $SIDECAR_PY"; exit 2; }
@@ -89,27 +135,29 @@ fi
 
 pkill -9 -f '[t]bp_npu.py' 2>/dev/null || true
 pkill -9 -f '[t]orchrun' 2>/dev/null || true
+pkill -9 -f '[t]rain_bench_probe_npu' 2>/dev/null || true
 pkill -9 -f '[s]idecar_inject_8c' 2>/dev/null || true
 pkill -9 -x stress-ng 2>/dev/null || true
 pkill -9 -f '[s]tress-ng' 2>/dev/null || true
+kill -CHLD 1 2>/dev/null || true
 sleep 1
 
 mkdir -p "$DUMP_ROOT" "$CKPT_DIR"
 
 CPU_N_DISP="${SIDECAR_8C_CPU_N:-nproc}"
-echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN"
+echo "MASTER_ADDR=$MASTER_ADDR NPROC=$NPROC RUN=$RUN dose=${DOSE} pod=${HOLD_POD}"
 echo "dose: cpu_n=${CPU_N_DISP} cpu_load=${SIDECAR_8C_CPU_LOAD} mb=${SIDECAR_8C_MB} leak_every=${SIDECAR_8C_LEAK_EVERY} max_chunks=${SIDECAR_8C_MAX_CHUNKS}"
 echo "$RUN" > /tmp/xpu_p3swc_run.txt
 echo "$DUMP_ROOT" > /tmp/xpu_p3swc_dump.txt
 
 cat >"$DUMP_ROOT/manifest.yaml" <<EOF
 case_id: P3-SW-C
-dose: loud
+dose: ${DOSE}
 phase: contrast
 run_id: $RUN
 case_ref: $CASE_REF
 world_size: $NPROC
-pod: yysong-worker-2
+pod: ${HOLD_POD}
 pool: pool-xpu
 mode: host_bound
 inject_kind: sidecar_8c
@@ -124,7 +172,7 @@ tool: XPUTimer
 label_prefix: yjr-as-b-xpu
 script: platform/ascend/xputimer/contrast_p3swc.sh
 accept_min_ratio: ${ACCEPT_MIN_RATIO}
-gold_step_ratio: 2.49
+gold_step_ratio: ${GOLD_STEP_RATIO}
 EOF
 
 stop_8c() {
@@ -273,7 +321,9 @@ run_arm() {
 run_arm C0_baseline "$MASTER_PORT_C0" 0
 run_arm C1_inject_none "$MASTER_PORT_C1" 1
 
-VERDICT_PY="${VERDICT_PY:-$CODE/s4_verdict.py}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERDICT_PY="${VERDICT_PY:-$SCRIPT_DIR/s4_verdict.py}"
+[[ -f "$VERDICT_PY" ]] || VERDICT_PY="${CODE}/s4_verdict.py"
 # exit 2 = no bite (still DONE); only fail if verdict writer itself crashes
 set +e
 python3 "$VERDICT_PY" \
@@ -283,11 +333,15 @@ python3 "$VERDICT_PY" \
   --ranks-c1 "$DUMP_ROOT/C1_inject_none/ranks" \
   --case-id P3-SW-C \
   --case-ref "$CASE_REF" \
-  --dose-desc "sidecar 8c cpu_n=${CPU_N_DISP} cpu_load=${SIDECAR_8C_CPU_LOAD} mb=${SIDECAR_8C_MB} leak_every=${SIDECAR_8C_LEAK_EVERY} max_chunks=${SIDECAR_8C_MAX_CHUNKS}; window [${INJECT_START},${INJECT_STOP}]" \
+  --dose "$DOSE" \
+  --dose-desc "sidecar 8c cpu_n=${CPU_N_DISP} cpu_load=${SIDECAR_8C_CPU_LOAD} mb=${SIDECAR_8C_MB} leak_every=${SIDECAR_8C_LEAK_EVERY} max_chunks=${SIDECAR_8C_MAX_CHUNKS}; window [${INJECT_START},${INJECT_STOP}]; dose=${DOSE}" \
   --accept-min-ratio "$ACCEPT_MIN_RATIO" \
   --out "$DUMP_ROOT/CONTRAST_VERDICT.md" \
   --summary "$DUMP_ROOT/CONTRAST_SUMMARY.json"
 vrc=$?
 set -e
 test -f "$DUMP_ROOT/CONTRAST_VERDICT.md" || { echo "missing VERDICT rc=$vrc"; exit 1; }
+if [[ -f "$DUMP_ROOT/C1_inject_none/injection.log" ]]; then
+  cp -f "$DUMP_ROOT/C1_inject_none/injection.log" "$DUMP_ROOT/injection.log" || true
+fi
 echo "CONTRAST_DONE RUN=$RUN DUMP=$DUMP_ROOT verdict_rc=$vrc"

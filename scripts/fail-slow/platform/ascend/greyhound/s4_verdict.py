@@ -188,6 +188,7 @@ def main() -> int:
     ap.add_argument("--tool", default="greyhound")
     ap.add_argument("--run-id", default="")
     ap.add_argument("--pod", default="yysong-worker-1")
+    ap.add_argument("--dose", default="loud", help="loud|quiet|masked；写入 SUMMARY，不改对手阈值")
     ap.add_argument("--frozen", default="")
     ap.add_argument("--note", default="")
     args = ap.parse_args()
@@ -236,11 +237,11 @@ def main() -> int:
     note = args.note or default_note
 
     lines = [
-        f"# Greyhound Contrast · {args.case_id} Loud",
+        f"# Greyhound Contrast · {args.case_id} {args.dose}",
         "",
         f"- run_id: `{run_id}`",
         f"- case_ref: `{args.case_ref}`",
-        f"- dose: {args.dose_desc}；窗对齐 Case [{args.inject_start},{args.inject_stop}]",
+        f"- dose_label: `{args.dose}`；dose: {args.dose_desc}；窗对齐 Case [{args.inject_start},{args.inject_stop}]",
         f"- fairness: `collect_seq` 真实 per-rank 序列 + C0 假阳性对照",
         f"- detect_ok: **{'yes' if auto_ok else 'no'}**；detect_mode: **{detect_mode}**"
         f"（自主= coll 比≥{args.accept_min_ratio} 或 Rbeast 变点[C1有/C0无]）",
@@ -310,7 +311,7 @@ def main() -> int:
         "oracle_trigger": False,
         "case_id": args.case_id,
         "tool": args.tool,
-        "dose": "loud",
+        "dose": args.dose,
         "frozen": args.frozen or args.dose_desc,
         "case_ref": args.case_ref,
         "world_size": 16,

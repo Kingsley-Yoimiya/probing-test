@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pickle
 import time
 from pathlib import Path
 
@@ -363,9 +364,128 @@ def main() -> None:
         print(f"INLINE_HBM_ALLOC mb={hbm_mb} copies/step={hbm_copies}", flush=True)
     ckpt_dir = Path(os.environ.get("CKPT_DIR", "/workspace/probe-bundle/ckpt"))
 
+    # Oracle short-window torch.profiler（dynolog 对照；不算自主检出）
+    oracle_on = os.environ.get("ORACLE_PROFILE", "0").strip().lower() in (
+        "1", "on", "true", "yes",
+    )
+    oracle_start = int(os.environ.get("ORACLE_PROFILE_START", "120"))
+    oracle_stop = int(os.environ.get("ORACLE_PROFILE_STOP", "128"))
+    oracle_dir = Path(
+        os.environ.get(
+            "ORACLE_PROFILE_DIR",
+            str(out_dir.parent / "dynolog" / "traces"),
+        )
+    )
+    oracle_ranks_raw = os.environ.get("ORACLE_PROFILE_RANKS", "").strip()
+    oracle_rank_set = (
+        {int(x) for x in oracle_ranks_raw.split(",") if x.strip()}
+        if oracle_ranks_raw
+        else None
+    )
+    do_oracle = bool(oracle_on and (oracle_rank_set is None or rank in oracle_rank_set))
+    prof = None
+
+    # Flight Recorder：环形缓冲常驻（TORCH_NCCL_TRACE_BUFFER_SIZE）；进程内 API dump 收证
+    fr_dump_on = os.environ.get("FR_DUMP", "0").strip().lower() in (
+        "1", "on", "true", "yes",
+    )
+    fr_dump_dir = Path(
+        os.environ.get(
+            "FR_DUMP_DIR",
+            str(out_dir.parent / "flight_recorder"),
+        )
+    )
+    fr_dump_step = int(os.environ.get("FR_DUMP_STEP", "300"))  # measure step
+    fr_dump_ranks_raw = os.environ.get("FR_DUMP_RANKS", "").strip()
+    fr_dump_rank_set = (
+        {int(x) for x in fr_dump_ranks_raw.split(",") if x.strip()}
+        if fr_dump_ranks_raw
+        else None
+    )
+    do_fr_dump = bool(
+        fr_dump_on and (fr_dump_rank_set is None or rank in fr_dump_rank_set)
+    )
+
+    def _fr_dump(tag: str) -> None:
+        if not do_fr_dump:
+            return
+        try:
+            fr_dump_dir.mkdir(parents=True, exist_ok=True)
+            c10d = torch._C._distributed_c10d
+            raw = c10d._dump_nccl_trace(
+                includeCollectives=True,
+                includeStackTraces=False,
+                onlyActive=False,
+            )
+            pkl_path = fr_dump_dir / f"rank{rank}_{tag}.pkl"
+            pkl_path.write_bytes(
+                raw if isinstance(raw, (bytes, bytearray)) else pickle.dumps(raw)
+            )
+            meta = {
+                "tag": tag,
+                "rank": int(rank),
+                "pkl_bytes": pkl_path.stat().st_size,
+                "TORCH_NCCL_TRACE_BUFFER_SIZE": os.environ.get(
+                    "TORCH_NCCL_TRACE_BUFFER_SIZE"
+                ),
+            }
+            try:
+                data = pickle.loads(raw) if isinstance(raw, (bytes, bytearray)) else raw
+                if isinstance(data, dict):
+                    ents = data.get("entries") or []
+                    meta["version"] = data.get("version")
+                    meta["entries_n"] = len(ents)
+                    states = {}
+                    names = {}
+                    for e in ents:
+                        if not isinstance(e, dict):
+                            continue
+                        st = str(e.get("state") or "?")
+                        states[st] = states.get(st, 0) + 1
+                        pn = str(e.get("profiling_name") or "?")
+                        names[pn] = names.get(pn, 0) + 1
+                    meta["states"] = states
+                    meta["profiling_names_top"] = dict(
+                        sorted(names.items(), key=lambda kv: -kv[1])[:8]
+                    )
+            except Exception as pe:  # noqa: BLE001
+                meta["parse_err"] = repr(pe)
+            (fr_dump_dir / f"rank{rank}_{tag}_meta.json").write_text(
+                json.dumps(meta, indent=2)
+            )
+            print(
+                f"FR_DUMP_OK rank={rank} tag={tag} bytes={meta.get('pkl_bytes')} "
+                f"entries={meta.get('entries_n')}",
+                flush=True,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"FR_DUMP_FAIL rank={rank} tag={tag}: {exc}", flush=True)
+
     f = out_file.open("a", buffering=1)  # line-buffered
     try:
         for i in range(args.iters):
+            if do_oracle and i == oracle_start and prof is None:
+                from torch.profiler import (  # noqa: WPS433 — 仅 oracle 开窗时导入
+                    ProfilerActivity,
+                    profile,
+                    tensorboard_trace_handler,
+                )
+
+                rank_trace_dir = oracle_dir / f"raw_rank_{rank:04d}"
+                rank_trace_dir.mkdir(parents=True, exist_ok=True)
+                prof = profile(
+                    activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+                    record_shapes=True,
+                    with_stack=False,
+                    on_trace_ready=tensorboard_trace_handler(str(rank_trace_dir)),
+                )
+                prof.__enter__()
+                print(
+                    f"ORACLE_PROFILE_START rank={rank} step={i} "
+                    f"stop={oracle_stop} dir={rank_trace_dir}",
+                    flush=True,
+                )
+
             # 内联 8a：measure 窗内每步泄漏 ~4MB；窗内周期性 gc+stall 抬 C1/C0 中位
             in_win_8a = bool(do_inline_8a and inline_start <= i < inline_stop)
             in_win_8b = bool(do_inline_8b and inline_start <= i < inline_stop)
@@ -388,6 +508,32 @@ def main() -> None:
                 hbm_bufs=(hbm_bufs if in_win_hbm else None),
                 hbm_copies=(hbm_copies if in_win_hbm else 0),
             )
+            if prof is not None and oracle_start <= i < oracle_stop:
+                prof.step()
+            if prof is not None and (i + 1) >= oracle_stop:
+                prof.__exit__(None, None, None)
+                print(
+                    f"ORACLE_PROFILE_STOP rank={rank} step={i} dir={oracle_dir}",
+                    flush=True,
+                )
+                # HTA 需要 distributedInfo.rank；汇总到 oracle_dir/rank{N}.pt.trace.json
+                try:
+                    rank_trace_dir = oracle_dir / f"raw_rank_{rank:04d}"
+                    cands = sorted(rank_trace_dir.glob("*.pt.trace.json"))
+                    if cands:
+                        tp = cands[-1]
+                        data = json.loads(tp.read_text())
+                        data["distributedInfo"] = {"rank": int(rank)}
+                        ranked = oracle_dir / f"rank{rank}.pt.trace.json"
+                        ranked.write_text(json.dumps(data))
+                        print(
+                            f"ORACLE_PROFILE_TAGGED rank={rank} -> {ranked.name} "
+                            f"events={len(data.get('traceEvents') or [])}",
+                            flush=True,
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    print(f"ORACLE_PROFILE_TAG_FAIL rank={rank}: {exc}", flush=True)
+                prof = None
             # 写在计时区之外: 绝不让 AFS I/O 污染 step_ms
             rec = {
                 "step": i,
@@ -404,10 +550,13 @@ def main() -> None:
             if (i + 1) % args.flush_every == 0:
                 f.flush()
                 os.fsync(f.fileno())
-            if rank == 0 and (i + 1) in {100, 300}:
-                # 编排器用这两个测量步 marker 实现“总 step 150--350”窗口：
+            if rank == 0 and (i + 1) in {50, 100, 300}:
+                # 编排器用这些测量步 marker：50=提前武装；100/300=验收窗边界
                 # warmup=50 时，measure 100/300 分别对应全局 150/350。
                 (out_dir / f"step_{i + 1}.marker").write_text(str(time.time()))
+            # Flight Recorder：注入窗末 API dump（收证；非常驻 trigger）
+            if do_fr_dump and (i + 1) == fr_dump_step:
+                _fr_dump(f"step{fr_dump_step}")
             # SOP：checkpoint 写盘（9B IO 路径；写在计时外）。默认每 100 步；P3-EXT-B Loud 可加密。
             ckpt_every = max(1, int(args.ckpt_every))
             if rank == 0 and (i + 1) % ckpt_every == 0:
@@ -417,6 +566,12 @@ def main() -> None:
                     ckpt_dir / f"step_{i + 1}.pt",
                 )
     finally:
+        if prof is not None:
+            try:
+                prof.__exit__(None, None, None)
+            except Exception:  # noqa: BLE001
+                pass
+            prof = None
         f.flush()
         try:
             os.fsync(f.fileno())
@@ -424,6 +579,8 @@ def main() -> None:
             pass
         f.close()
 
+    # 收证：训练结束前 API dump（缓冲常驻；此调用只是落盘，非检出 trigger）
+    _fr_dump("end")
     dist.barrier()
     if rank == 0:
         print(f"DONE world={world} out={out_file}")

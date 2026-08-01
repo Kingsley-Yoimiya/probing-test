@@ -169,9 +169,18 @@ rc=\$?
 if [ \$rc -eq 0 ]; then touch '$out/node_${n}.done'; else echo \$rc > '$out/node_${n}.fail'; fi
 LAUNCHER
 )
-    printf '%s' "$launcher" | pexec_i "${PODS[$n]}" "cat > /tmp/run_${GROUP_ID}.sh && chmod +x /tmp/run_${GROUP_ID}.sh" 2>/dev/null
+    # 必须写成功：静默失败会留下旧 GROUP 的 /tmp/run_N.sh（例如 P1-EXT-A C6）被误点火
+    if ! printf '%s' "$launcher" | pexec_i "${PODS[$n]}" "cat > /tmp/run_${GROUP_ID}.sh && chmod +x /tmp/run_${GROUP_ID}.sh"; then
+      echo "FAIL_WRITE_LAUNCHER pod=${PODS[$n]} group=$GROUP_ID" >&2
+      return 1
+    fi
+    if ! pexec "${PODS[$n]}" "grep -q '$out' /tmp/run_${GROUP_ID}.sh && grep -q -- '--out-dir' /tmp/run_${GROUP_ID}.sh"; then
+      echo "FAIL_VERIFY_LAUNCHER pod=${PODS[$n]} out=$out (stale or truncated /tmp/run_${GROUP_ID}.sh)" >&2
+      return 1
+    fi
   done
   # 全并行发射 + 每节点重试，避免 7/8 rendezvous 超时
+  local fire_rc=0
   for ((n=0; n<NNODES; n++)); do
     (
       for try in 1 2 3 4 5 6; do
@@ -185,8 +194,8 @@ LAUNCHER
       exit 1
     ) &
   done
-  wait || true
-  return 0
+  wait || fire_rc=1
+  return $fire_rc
 }
 
 wait_warmup() {   # $1=out_dir；rank0 位于 master，故 marker 在 master pod
@@ -261,7 +270,8 @@ start_sidecar() {   # 在 victim(node0)起注入; freq / 内联 8a 不走这里
 
 wait_sidecar_start() {  # $1=out_dir；GPU sidecar 必须见到 SIDECAR_START，否则注入窗空转
   local out="$1" v="${PODS[0]}" e=0
-  local budget=$(( SIDECAR_WARMUP + 30 ))
+  local budget=$(( SIDECAR_WARMUP + 45 ))
+  local miss=0
   while [ "$e" -lt "$budget" ]; do
     if pexec "$v" "grep -q 'SIDECAR_START' '$out/injection.log' 2>/dev/null" 2>/dev/null; then
       echo "  sidecar START ok(${e}s)"
@@ -271,11 +281,21 @@ wait_sidecar_start() {  # $1=out_dir；GPU sidecar 必须见到 SIDECAR_START，
       echo "  sidecar START aborted: training fail"
       return 1
     fi
-    # 进程已死且无 START → 失败，勿空等
-    if ! pexec "$v" "pgrep -f '[s]idecar_inject.py' >/dev/null" 2>/dev/null; then
-      echo "  sidecar START failed: process gone without SIDECAR_START"
-      pexec "$v" "tail -n 40 '$out/injection.log' 2>/dev/null" 2>/dev/null || true
-      return 1
+    # 进程已死且无 START → 失败；kubectl 瞬时失败勿误判（连续 3 次 miss 才信）
+    if pexec "$v" "pgrep -f '[s]idecar_inject' >/dev/null" 2>/dev/null; then
+      miss=0
+    else
+      miss=$((miss+1))
+      if [ "$miss" -ge 3 ]; then
+        # 再读一次 log，避免 START 已写但 pgrep 抖动
+        if pexec "$v" "grep -q 'SIDECAR_START' '$out/injection.log' 2>/dev/null" 2>/dev/null; then
+          echo "  sidecar START ok(${e}s, after pgrep miss)"
+          return 0
+        fi
+        echo "  sidecar START failed: process gone without SIDECAR_START"
+        pexec "$v" "tail -n 40 '$out/injection.log' 2>/dev/null" 2>/dev/null || true
+        return 1
+      fi
     fi
     sleep 2; e=$((e+2))
   done
@@ -340,7 +360,7 @@ wait_done() {   # $1=out_dir $2=是否按 stop marker 停 sidecar
 }
 
 # ===== configs (保留 C0-C4) — 用函数替代关联数组(兼容 bash 3.2) =====
-CONFIGS=("C0_baseline" "C1_inject_none" "C2_probing" "C3_greyhound" "C4_xputimer" "C5_flight_recorder")
+CONFIGS=("C0_baseline" "C1_inject_none" "C2_probing" "C3_greyhound" "C4_xputimer" "C5_flight_recorder" "C6_dynolog")
 config_denv() {   # $1=cfg → echo detect_env
   case "$1" in
     C0_baseline|C1_inject_none) echo "unset PROBING PROBING_TORCH_PROFILING PROBING_GPU; export PROBING=0;" ;;
@@ -355,11 +375,16 @@ config_denv() {   # $1=cfg → echo detect_env
         echo "export PROBING=2; unset PROBING_TORCH_PROFILING; export PROBING_GPU=on; export PROBING_GPU_SAMPLE_MS=1000;"
       fi
       ;;
-    C3_greyhound) echo "export LD_PRELOAD=$CODE_DIR/greyhound/libmcclprobe.so;" ;;
+    # collect-min：LD_PRELOAD mccl* + JSONL dump（路径在主循环按 $out 补全）
+    C3_greyhound) echo "export LD_PRELOAD=$CODE_DIR/greyhound/libmcclprobe.so; export GREYHOUND_DEBUG=\${GREYHOUND_DEBUG:-1};" ;;
     C4_xputimer)  echo "export LD_PRELOAD=$CODE_DIR/xputimer/libxpu_timer_metax.so;" ;;
-    # Flight Recorder：环形缓冲；dump 需训练侧/进程退出时落盘。触发协议见 ledger（本战役标 oracle 若人工开窗）。
+    # Flight Recorder：环形缓冲常驻；进程内 _dump_nccl_trace 收证（非检出 trigger）。
     C5_flight_recorder)
-      echo "unset PROBING PROBING_TORCH_PROFILING; export PROBING=0; export TORCH_NCCL_TRACE_BUFFER_SIZE=\${TORCH_NCCL_TRACE_BUFFER_SIZE:-1048576}; export TORCH_NCCL_DUMP_ON_TIMEOUT=1;"
+      echo "unset PROBING PROBING_TORCH_PROFILING LD_PRELOAD; export PROBING=0; export TORCH_NCCL_TRACE_BUFFER_SIZE=\${TORCH_NCCL_TRACE_BUFFER_SIZE:-2000}; export TORCH_NCCL_DUMP_ON_TIMEOUT=1;"
+      ;;
+    # Dynolog 对照：daemon IPC 未通 → oracle torch.profiler 短窗（不算自主检出）；勿混挂 GH/XPU
+    C6_dynolog)
+      echo "unset PROBING PROBING_TORCH_PROFILING PROBING_GPU LD_PRELOAD; export PROBING=0;"
       ;;
     *) echo "" ;;
   esac
@@ -386,6 +411,45 @@ for r in $(seq 1 "$ROUNDS"); do
     echo "── [$cfg] r=$r port=$port ──"
     clean_group
     denv="$(config_denv "$cfg")"; inj="$(config_has_inject "$cfg")"
+    # Greyhound MetaX：dump/marker 落到本轮 out（LOCAL_FS 每 pod 一份）
+    if [ "$cfg" = "C3_greyhound" ]; then
+      denv="${denv}
+mkdir -p '$out/greyhound';
+export GREYHOUND_DUMP='$out/greyhound/mcclprobe.collect.jsonl';
+export GREYHOUND_STUB_MARKER='$out/greyhound/loaded.marker';"
+    fi
+    # XPUTimer MetaX：prom/jsonl 落到本轮 out/xputimer（勿混挂 greyhound）
+    if [ "$cfg" = "C4_xputimer" ]; then
+      denv="${denv}
+mkdir -p '$out/xputimer';
+export XPU_TIMER_ENABLE=1;
+export XPU_TIMER_DUMP_DIR='$out/xputimer';
+export XPU_TIMER_DUMP_INTERVAL_S=\${XPU_TIMER_DUMP_INTERVAL_S:-2};
+export XPU_TIMER_HANG_TIMEOUT_MS=\${XPU_TIMER_HANG_TIMEOUT_MS:-60000};
+export XPU_TIMER_SLOW_REPORT_US=\${XPU_TIMER_SLOW_REPORT_US:-0};
+export XPU_TIMER_LAUNCH_SAMPLE=\${XPU_TIMER_LAUNCH_SAMPLE:-32};"
+    fi
+    # Flight Recorder：dump 目录 + API dump 开关（默认全 rank；可用 FR_DUMP_RANKS 收窄）
+    if [ "$cfg" = "C5_flight_recorder" ]; then
+      denv="${denv}
+mkdir -p '$out/flight_recorder';
+export FR_DUMP=1;
+export FR_DUMP_DIR='$out/flight_recorder';
+export FR_DUMP_STEP=\${FR_DUMP_STEP:-300};
+export TORCH_NCCL_TRACE_BUFFER_SIZE=\${TORCH_NCCL_TRACE_BUFFER_SIZE:-2000};
+export TORCH_NCCL_DUMP_ON_TIMEOUT=1;"
+    fi
+    # Dynolog / oracle profiler：已知注入窗内短开（默认 victim L7 + healthy L0）
+    if [ "$cfg" = "C6_dynolog" ]; then
+      denv="${denv}
+mkdir -p '$out/dynolog/traces' '$out/dynolog/logs';
+export ORACLE_PROFILE=1;
+export ORACLE_PROFILE_DIR='$out/dynolog/traces';
+export ORACLE_PROFILE_START=\${ORACLE_PROFILE_START:-120};
+export ORACLE_PROFILE_STOP=\${ORACLE_PROFILE_STOP:-128};
+export ORACLE_PROFILE_RANKS=\${ORACLE_PROFILE_RANKS:-0,7};
+export ORACLE_TRIGGERED=1;"
+    fi
     # P3-SW-A：进程内联 8a（外挂 GC 无效）
     if [ "$inj" = "yes" ] && { [ "$INJECT_KIND" = "8a" ] || [ "$INJECT_KIND" = "inline_8a" ]; }; then
       # Loud 默认每步 250ms STW，确保 C1/C0 中位≥1.3；可用 INLINE_GC_* 覆盖
